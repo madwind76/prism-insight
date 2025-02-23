@@ -1,0 +1,10 @@
+streamlit>=1.10.0
+pandas
+numpy
+mcp-agent
+requests
+aiohttp
+python-dateutil
+email-validator
+openai
+markdown>=3.3.0
