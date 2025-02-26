@@ -195,7 +195,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                 name="corporate_data_collector1",
                 instruction=f"""당신은 기업 개요 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {reference_date} 날짜(YYYYMMDD 형식)로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 get-markdown tool 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             
                             ## 접속 URL : {urls['기업개요']}
                             
@@ -205,13 +205,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "corporate_status": Agent(
                 name="corporate_data_collector2",
                 instruction=f"""당신은 기업현황 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 get-markdown tool 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             
                             - 접속 URL :  {urls['기업현황']}
                             
@@ -221,13 +221,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "financial_analysis1": Agent(
                 name="corporate_data_collector3_1",
                 instruction=f"""당신은 기업 재무분석(포괄손익계산서) 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 [get-markdown tool] 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             '포괄손익계산서'탭을 위주로 분석해주세요
                             
                             - 접속 URL :  {urls['재무분석']}
@@ -238,13 +238,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "financial_analysis2": Agent(
                 name="corporate_data_collector3_2",
                 instruction=f"""당신은 기업 재무분석(재무상태표) 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 [get-markdown tool] 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             '재무상태표'탭을 위주로 분석해주세요
                             
                             - 접속 URL :  {urls['재무분석']}
@@ -255,14 +255,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
-            ##todo : 개행문자 삽입이 안됨
             "financial_analysis3": Agent(
                 name="corporate_data_collector3_3",
                 instruction=f"""당신은 기업 재무분석(현금흐름표) 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 [get-markdown tool] 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             '현금흐름표'탭을 위주로 분석해주세요.
                             
                             - 접속 URL :  {urls['재무분석']}
@@ -273,13 +272,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "investment_indicators": Agent(
                 name="corporate_data_collector4",
                 instruction=f"""당신은 기업 투자지표 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 get-markdown tool 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             페이지 안에 '수익성', '성장성', '안정성', '활동성' 등의 단어의 탭이 보이면 거기도 들어갈 수 있도록 시도해보세요. url파라미터를 조절하며 접근하면 될겁니다.
                             
                             - 접속 URL :  {urls['투자지표']}
@@ -290,13 +289,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "consensus_data": Agent(
                 name="corporate_data_collector5",
                 instruction=f"""당신은 기업 컨센서스 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 get-markdown tool 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             페이지 안에 '분기' 단어의 탭이 보이면 거기도 들어갈 수 있도록 시도해보세요. url파라미터를 조절하며 접근하면 될겁니다.
                             
                             - 접속 URL :  {urls['컨센서스']}
@@ -307,13 +306,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "competitor_analysis": Agent(
                 name="corporate_data_collector6",
                 instruction=f"""당신은 기업 경쟁사분석 데이터 수집 전문가입니다.
                             아래 url에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 get-markdown tool 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             페이지 안에 '분기' 단어의 탭이 보이면 거기도 들어갈 수 있도록 시도해보세요. url파라미터를 조절하며 접근하면 될겁니다.
                             
                             - 접속 URL :  {urls['경쟁사분석']}
@@ -324,13 +323,13 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "etc_analysis": Agent(
                 name="corporate_data_collector7",
                 instruction=f"""당신은 기업 지분현황/업종분석/최근리포트 데이터 수집 전문가입니다.
                             아래 url 리스트에 접속해서 {year} 년도로부터 2~3년전까지 자료들을 수집하고 최신순으로 분석하세요:
-                            단, url 접속 시 get-markdown tool 사용하되, 차트는 분석하지 말고 테이블을 위주로 분석하세요.
+                            단, url 접속 시 visit_page tool을 사용하고 takeScreenshot 파라미터는 false로 넣으세요. 그리고 차트는 분석하지 말고 테이블을 위주로 분석하세요.
                             
                             - 접속 URL 리스트 :
                              1. 지분현황 : {urls['지분현황']}
@@ -343,7 +342,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                             최대한 상세하고 구체적인 수치가 많이 들어가도록 전문성 있는 수집결과를 작성해주세요.
                             기업: {company_name} ({company_code})
                             """,
-                server_names=["fetch"]
+                server_names=["webresearch"]
             ),
             "news_data": Agent(
                 name="news_data_collector",
@@ -1135,11 +1134,11 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
 
         # 1. 병렬로 데이터 수집 수행
         collection_tasks = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:  # worker 수 제한
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:  # worker 수 제한
             for i, (data_key, collector_agent) in enumerate(data_collectors.items()):
                 collection_tasks.append(
                     collect_data(data_key, collector_agent, company_name, company_code,
-                                 reference_date, logger, delay=i*3.0)  # 각 작업마다 3초씩 차이
+                                 reference_date, logger, delay=i*10.0)  # 각 작업마다 10초씩 차이
                 )
 
             results = await asyncio.gather(*collection_tasks)
@@ -1152,12 +1151,12 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
 
         # 2. 병렬로 보고서 섹션 작성
         writing_tasks = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:  # worker 수 제한
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:  # worker 수 제한
             for i, (data_key, writer_agent) in enumerate(report_writers.items()):
                 writing_tasks.append(
                     write_report_section(data_key, writer_agent, collected_data,
                                          company_name, company_code, reference_date,
-                                         logger, delay=i*3.0)  # 각 작업마다 3초씩 차이
+                                         logger, delay=i*10.0)  # 각 작업마다 10초씩 차이
                 )
 
             results = await asyncio.gather(*writing_tasks)
