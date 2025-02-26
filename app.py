@@ -20,7 +20,7 @@ REPORTS_DIR.mkdir(exist_ok=True)
 
 # 작업 큐 및 스레드 풀 설정
 analysis_queue = Queue()
-worker_pool = ThreadPoolExecutor(max_workers=5)
+worker_pool = ThreadPoolExecutor(max_workers=2)
 
 class AnalysisRequest:
     def __init__(self, stock_code: str, company_name: str, email: str, reference_date: str):
