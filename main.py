@@ -107,22 +107,20 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
         report_writers = {
             "technical_analysis": Agent(
                 name="technical_analysis_agent",
-                instruction=f"""당신은 주식 기술적 분석 전문가입니다. 주어진 종목의 주가 데이터, 시가총액, 거래량 데이터를 종합적으로 분석하여 기술적 분석 보고서를 작성해야 합니다.
+                instruction=f"""당신은 주식 기술적 분석 전문가입니다. 주어진 종목의 주가 데이터, 거래량 데이터를 종합적으로 분석하여 기술적 분석 보고서를 작성해야 합니다.
 
                                 ## 수집해야 할 데이터
                                 1. 주가/거래량 데이터: get_stock_ohlcv tool을 사용하여 {six_months_ago}~{reference_date} 기간의 데이터 수집
-                                2. 시가총액 데이터: get_stock_market_cap tool을 사용하여 {six_months_ago}~{reference_date} 기간의 데이터 수집
-                                3. 투자자별 거래 데이터: get_stock_trading_volume tool을 사용하여 {six_months_ago}~{reference_date} 기간의 데이터 수집
+                                2. 투자자별 거래 데이터: get_stock_trading_volume tool을 사용하여 {six_months_ago}~{reference_date} 기간의 데이터 수집
                 
                                 ## 분석 요소
                                 1. 주가 추세 및 패턴 분석 (상승/하락/횡보, 차트 패턴)
                                 2. 이동평균선 분석 (단기/중기/장기 이평선 골든크로스/데드크로스)
                                 3. 주요 지지선과 저항선 식별 및 설명
                                 4. 거래량 분석 (거래량 증감 패턴과 주가 움직임 관계)
-                                5. 시가총액 변화와 주가 움직임의 상관관계
-                                6. 투자자별(기관/외국인/개인) 매매 패턴과 주가 영향
-                                7. 주요 기술적 지표 해석 (RSI, MACD, 볼린저밴드 등이 데이터에서 계산 가능한 경우)
-                                8. 단기/중기 기술적 전망
+                                5. 투자자별(기관/외국인/개인) 매매 패턴과 주가 영향
+                                6. 주요 기술적 지표 해석 (RSI, MACD, 볼린저밴드 등이 데이터에서 계산 가능한 경우)
+                                7. 단기/중기 기술적 전망
                 
                                 ## 보고서 구성
                                 1. 주가 데이터 개요 및 요약 - 최근 추세, 주요 가격대, 변동성
