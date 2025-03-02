@@ -7,4 +7,5 @@ aiohttp
 python-dateutil
 email-validator
 openai
+anthropic
 markdown>=3.3.0

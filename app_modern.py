@@ -566,7 +566,7 @@ class ModernStockAnalysisApp:
     @staticmethod
     def save_report(stock_code: str, company_name: str, reference_date: str, content: str) -> Path:
         """보고서를 파일로 저장"""
-        filename = f"{stock_code}_{company_name}_{reference_date}.md"
+        filename = f"{stock_code}_{company_name}_{reference_date}_claude_3_7.md"
         filepath = REPORTS_DIR / filename
 
         with open(filepath, "w", encoding="utf-8") as f:
