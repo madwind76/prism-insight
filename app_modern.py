@@ -554,7 +554,7 @@ class ModernStockAnalysisApp:
     @staticmethod
     def get_cached_report(stock_code: str, reference_date: str) -> tuple[bool, str, Path | None]:
         """캐시된 보고서 검색"""
-        report_pattern = f"{stock_code}_*_{reference_date}.md"
+        report_pattern = f"{stock_code}_*_{reference_date}*.md"
         matching_files = list(REPORTS_DIR.glob(report_pattern))
 
         if matching_files:
