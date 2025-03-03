@@ -1,14 +1,11 @@
 import asyncio
-import concurrent.futures
 import re
 from datetime import datetime, timedelta
 
 from mcp_agent.agents.agent import Agent
 from mcp_agent.app import MCPApp
 from mcp_agent.workflows.llm.augmented_llm import RequestParams
-from mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM
 from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
-
 
 app = MCPApp(name="stock_analysis")
 # WiseReport URL 템플릿 설정
@@ -398,6 +395,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                    - 스윙 트레이더 관점 (1-3개월)
                    - 중기 투자자 관점 (3-12개월)
                    - 장기 투자자 관점 (1년 이상)
+                   - 신규 진입자, 기존 보유자 각각의 관점 (비중 활용한 설명)
                 3. 주요 매매 포인트
                    - 매수 고려 가격대 및 조건
                    - 매도/손절 가격대 및 조건
