@@ -20,7 +20,6 @@ REPORTS_DIR.mkdir(exist_ok=True)
 
 # 작업 큐 및 스레드 풀 설정
 analysis_queue = Queue()
-worker_pool = ProcessPoolExecutor(max_workers=2)
 
 class AnalysisRequest:
     def __init__(self, stock_code: str, company_name: str, email: str, reference_date: str):
@@ -523,19 +522,26 @@ class ModernStockAnalysisApp:
                 send_email(request.email, cached_content)
                 request.result = f"캐시된 분석 보고서가 이메일로 전송되었습니다. (파일: {cached_file.name})"
             else:
-                # 새로운 분석 실행 - 별도 프로세스에서 실행
-                def run_analyze(code, name, date):
-                    import asyncio
-                    from main import analyze_stock
-                    return asyncio.run(analyze_stock(company_code=code, company_name=name, reference_date=date))
+                # 새로운 분석 실행 - 메인 프로세스에서 직접 실행 (수정된 부분)
+                # 비동기 함수를 동기적으로 실행
+                import asyncio
 
-                with ProcessPoolExecutor(max_workers=1) as executor:
-                    report = executor.submit(
-                        run_analyze,
-                        request.stock_code,
-                        request.company_name,
-                        request.reference_date
-                    ).result()
+                # 새로운 이벤트 루프 생성
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+                try:
+                    # 분석 실행
+                    report = loop.run_until_complete(
+                        analyze_stock(
+                            company_code=request.stock_code,
+                            company_name=request.company_name,
+                            reference_date=request.reference_date
+                        )
+                    )
+                finally:
+                    # 이벤트 루프 닫기
+                    loop.close()
 
                 # 보고서 저장
                 saved_file = self.save_report(
