@@ -522,36 +522,54 @@ class ModernStockAnalysisApp:
                 send_email(request.email, cached_content)
                 request.result = f"캐시된 분석 보고서가 이메일로 전송되었습니다. (파일: {cached_file.name})"
             else:
-                # 새로운 분석 실행 - 메인 프로세스에서 직접 실행 (수정된 부분)
-                # 비동기 함수를 동기적으로 실행
-                import asyncio
+                # 별도 프로세스로 분석 실행
+                import subprocess
+                import tempfile
+                import json
 
-                # 새로운 이벤트 루프 생성
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                # 요청 정보를 임시 파일에 저장
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                    request_info = {
+                        'stock_code': request.stock_code,
+                        'company_name': request.company_name,
+                        'reference_date': request.reference_date,
+                        'output_file': f"reports/{request.stock_code}_{request.company_name}_{request.reference_date}_gpt4o.md"
+                    }
+                    json.dump(request_info, f)
+                    request_file = f.name
 
-                try:
-                    # 분석 실행
-                    report = loop.run_until_complete(
-                        analyze_stock(
-                            company_code=request.stock_code,
-                            company_name=request.company_name,
-                            reference_date=request.reference_date
-                        )
-                    )
-                finally:
-                    # 이벤트 루프 닫기
-                    loop.close()
+                # 별도 프로세스 실행
+                subprocess.Popen([
+                    "python", "-c",
+                    f'''
+                            import asyncio, json, os
+                            from main import analyze_stock
+                            
+                            # 요청 정보 로드
+                            with open("{request_file}", "r") as f:
+                                info = json.load(f)
+                            
+                            # 분석 실행
+                            async def run():
+                                report = await analyze_stock(
+                                    company_code=info["stock_code"],
+                                    company_name=info["company_name"],
+                                    reference_date=info["reference_date"]
+                                )
+                                # 결과 저장
+                                with open(info["output_file"], "w", encoding="utf-8") as f:
+                                    f.write(report)
+                                # 이메일 전송 
+                                from email_sender import send_email
+                                send_email("{request.email}", report)
+                                # 임시 파일 삭제
+                                os.remove("{request_file}")
+                            
+                            asyncio.run(run())
+                    '''
+                ])
 
-                # 보고서 저장
-                saved_file = self.save_report(
-                    request.stock_code, request.company_name,
-                    request.reference_date, report
-                )
-
-                # 이메일 전송
-                send_email(request.email, report)
-                request.result = f"분석이 완료되었으며, 결과가 이메일로 전송되었습니다. (파일: {saved_file.name})"
+                request.result = f"분석이 시작되었습니다. 완료 후 이메일로 결과가 전송됩니다."
 
             request.status = "completed"
 
