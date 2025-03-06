@@ -542,31 +542,31 @@ class ModernStockAnalysisApp:
                 subprocess.Popen([
                     "python", "-c",
                     f'''
-                            import asyncio, json, os
-                            from main import analyze_stock
-                            
-                            # 요청 정보 로드
-                            with open("{request_file}", "r") as f:
-                                info = json.load(f)
-                            
-                            # 분석 실행
-                            async def run():
-                                report = await analyze_stock(
-                                    company_code=info["stock_code"],
-                                    company_name=info["company_name"],
-                                    reference_date=info["reference_date"]
-                                )
-                                # 결과 저장
-                                with open(info["output_file"], "w", encoding="utf-8") as f:
-                                    f.write(report)
-                                # 이메일 전송 
-                                from email_sender import send_email
-                                send_email("{request.email}", report)
-                                # 임시 파일 삭제
-                                os.remove("{request_file}")
-                            
-                            asyncio.run(run())
-                    '''
+import asyncio, json, os
+from main import analyze_stock
+
+# 요청 정보 로드
+with open("{request_file}", "r") as f:
+    info = json.load(f)
+
+# 분석 실행
+async def run():
+    report = await analyze_stock(
+        company_code=info["stock_code"],
+        company_name=info["company_name"],
+        reference_date=info["reference_date"]
+    )
+    # 결과 저장
+    with open(info["output_file"], "w", encoding="utf-8") as f:
+        f.write(report)
+    # 이메일 전송 
+    from email_sender import send_email
+    send_email("{request.email}", report)
+    # 임시 파일 삭제
+    os.remove("{request_file}")
+
+asyncio.run(run())
+'''
                 ])
 
                 request.result = f"분석이 시작되었습니다. 완료 후 이메일로 결과가 전송됩니다."
