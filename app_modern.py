@@ -40,11 +40,34 @@ class ModernStockAnalysisApp:
     def setup_page(self):
         """페이지 설정 및 커스텀 CSS 적용"""
         st.set_page_config(
-            page_title="stocksimulation.kr | 주식 종목 분석 서비스",
+            page_title="analysis.stocksimulation.kr | AI 주식 분석 에이전트",
             page_icon="📊",
-            layout="wide"
+            layout="wide",
+            # Open Graph 메타데이터 추가
+            menu_items={
+                'Get Help': None,
+                'Report a bug': None,
+                'About': """
+                # analysis.stocksimulation.kr
+                AI 주식 분석 에이전트
+                """
+            }
         )
-        
+
+        # Open Graph 태그 직접 주입
+        og_html = """
+        <head>
+            <title>analysis.stocksimulation.kr | AI 주식 분석 에이전트</title>
+            <meta property="og:title" content="analysis.stocksimulation.kr | AI 주식 분석 에이전트" />
+            <meta property="og:description" content="AI 주식 분석 에이전트" />
+            <meta property="og:image" content="https://media.istockphoto.com/id/2045262949/ko/%EC%82%AC%EC%A7%84/excited-businessman-raises-hands-and-punches-air-while-celebrating-successful-deal-stock.jpg?s=2048x2048&w=is&k=20&c=XtdmbV6gILRK1ahoMOf0_SFC256rgHyiaID_FeW4ojU=" />
+            <meta property="og:url" content="https://analysis.stocksimulation.kr" />
+            <meta property="og:type" content="website" />
+            <meta property="og:site_name" content="analysis.stocksimulation.kr" />
+        </head>
+        """
+        st.markdown(og_html, unsafe_allow_html=True)
+
         # 커스텀 CSS 적용
         self.apply_custom_styles()
 
@@ -442,10 +465,10 @@ class ModernStockAnalysisApp:
         <div class="header">
             <div class="logo-container">
                 <div class="logo">📊</div>
-                <div class="app-title">stocksimulation.kr</div>
+                <div class="app-title">analysis.stocksimulation.kr</div>
             </div>
             <div class="app-description">
-                AI 기반 종합 주식 분석 플랫폼
+                AI 주식 분석 에이전트
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -613,7 +636,7 @@ asyncio.run(run())
         self.add_app_header()
 
         # 앱 설명 카드 (텍스트만 사용)
-        st.markdown("### 🤖 주식 종목 분석 서비스")
+        st.markdown("### 🤖 AI 주식 분석 에이전트 서비스")
         st.markdown("이 서비스는 AI를 활용하여 종목을 심층 분석하고 전문가 수준의 투자 분석 보고서를 자동으로 생성합니다. 회사 정보와 이메일을 입력하시면 분석이 완료된 후 결과가 이메일로 전송됩니다.")
 
         # 두 개의 열로 나누어 레이아웃 구성
