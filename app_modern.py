@@ -892,7 +892,7 @@ asyncio.run(run())
         st.sidebar.markdown("""
         <div class="sidebar-header">
             <div class="sidebar-logo">📊</div>
-            <div class="sidebar-title">stocksimulation.kr</div>
+            <div class="sidebar-title">analysis.stocksimulation.kr</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -914,7 +914,7 @@ asyncio.run(run())
         st.sidebar.markdown("---")
         st.sidebar.markdown("#### 서비스 정보")
         st.sidebar.markdown("버전: v1.0.2")
-        st.sidebar.markdown("© 2025 https://stocksimulation.kr")
+        st.sidebar.markdown("© 2025 https://analysis.stocksimulation.kr")
         
         # 메인 콘텐츠 렌더링
         if menu == "분석 요청":
