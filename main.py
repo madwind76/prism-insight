@@ -448,10 +448,6 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
             if section in report_writers:
                 logger.info(f"Processing {section} for {company_name}...")
 
-                # 각 호출 사이에 충분한 지연 시간 추가 (60초)
-                if section != base_sections[0]:  # 첫 번째가 아닌 경우에만 지연
-                    await asyncio.sleep(60)
-
                 try:
                     agent = report_writers[section]
 
@@ -485,13 +481,36 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                     logger.info(f"Completed {section} - {len(report)} characters")
                 except Exception as e:
                     logger.error(f"Error processing {section}: {e}")
-                    # 실패하면 60초 후 한 번 더 시도
-                    await asyncio.sleep(60)
+                    # 실패하면 30초 후 한 번 더 시도
+                    await asyncio.sleep(30)
                     try:
                         agent = report_writers[section]
                         llm = await agent.attach_llm(OpenAIAugmentedLLM)
                         report = await llm.generate_str(
-                            # (동일한 메시지)...
+
+                            message=f"""{company_name}({company_code})의 {section} 분석 보고서를 작성해주세요.
+                                
+                                ## 분석 및 보고서 작성 지침:
+                                1. 데이터 수집부터 분석까지 모든 과정을 수행하세요.
+                                2. 보고서는 충분히 상세하되 핵심 정보에 집중하세요.
+                                3. 일반 개인 투자자가 쉽게 이해할 수 있는 수준으로 작성하세요.
+                                4. 투자 결정에 직접적으로 도움이 되는 실용적인 내용에 집중하세요.
+                                5. 실제 수집된 데이터에만 기반하여 분석하고, 없는 데이터는 추측하지 마세요.
+                                
+                                ## 형식 요구사항:
+                                1. 보고서 시작 시 제목을 넣기 전에 반드시 개행문자를 2번 넣어 시작하세요 (\\n\\n).
+                                2. 섹션 제목과 구조는 에이전트 지침에 명시된 형식을 따르세요.
+                                3. 가독성을 위해 적절히 단락을 나누고, 중요한 내용은 강조하세요.
+                                
+                                ##분석일: {reference_date}(YYYYMMDD 형식)
+                                """,
+                            request_params=RequestParams(
+                                model="gpt-4o",
+                                maxTokens=4000,
+                                max_iterations=3,
+                                parallel_tool_calls=True,
+                                use_history=True
+                            )
                         )
                         section_reports[section] = report
                         logger.info(f"Retry completed {section} - {len(report)} characters")
@@ -505,9 +524,6 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
             if section in section_reports:
                 combined_reports += f"\n\n--- {section.upper()} ---\n\n"
                 combined_reports += section_reports[section]
-
-        # 3. 60초 지연 후 investment_strategy 에이전트 실행
-        await asyncio.sleep(60)
 
         try:
             logger.info(f"Processing investment_strategy for {company_name}...")
@@ -538,9 +554,6 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
         except Exception as e:
             logger.error(f"Error processing investment_strategy: {e}")
             section_reports["investment_strategy"] = "투자 전략 분석 실패"
-
-        # 4. 60초 지연 후 요약 생성
-        await asyncio.sleep(60)
 
         # 모든 섹션을 포함한 종합 보고서 생성
         all_reports = ""
