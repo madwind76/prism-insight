@@ -9,3 +9,11 @@ email-validator
 openai
 anthropic
 markdown>=3.3.0
+python-telegram-bot>=13.7
+asyncio>=3.4.3
+
+# 파일 처리 및 로깅
+pathlib>=1.0.1
+python-dotenv>=1.0.0
+
+pykrx
