@@ -2,7 +2,7 @@
 
 # 로그 파일 설정
 LOG_FILE="/root/kospi-kosdaq-stock-analyzer/stock_scheduler.log"
-SCRIPT_DIR="/root/kospi-kosdaq-stock-analyzer"  # 실제 프로젝트 경로로 변경
+SCRIPT_DIR="/root/kospi-kosdaq-stock-analyzer"
 
 # 로그 함수
 log() {
@@ -26,30 +26,35 @@ fi
 # 실행할 프로그램 모드
 MODE=$1
 ACCOUNT_TYPE="premium"
+TODAY=$(date +%Y%m%d)
+
+# 로그 파일 지정 (날짜별)
+BATCH_LOG_FILE="${SCRIPT_DIR}/logs/stock_analysis_${MODE}_${TODAY}.log"
+mkdir -p "${SCRIPT_DIR}/logs"
 
 # 로그 출력
-log "실행 모드: $MODE"
+log "실행 모드: $MODE, 로그 파일: $BATCH_LOG_FILE"
 
 # 가상환경 활성화 (있는 경우)
 if [ -f "venv/bin/activate" ]; then
-    log "가상환경 활성화"
     source venv/bin/activate
 fi
 
-# 스크립트 실행
-log "$MODE 배치 실행 시작"
-python stock_analysis_orchestrator.py --mode $MODE --account-type $ACCOUNT_TYPE >> $LOG_FILE 2>&1
-RESULT=$?
+# 백그라운드에서 스크립트 실행
+log "$MODE 배치 백그라운드 실행 시작"
+nohup python stock_analysis_orchestrator.py --mode $MODE --account-type $ACCOUNT_TYPE > $BATCH_LOG_FILE 2>&1 &
 
-if [ $RESULT -eq 0 ]; then
-    log "$MODE 배치 실행 완료: 성공"
-else
-    log "$MODE 배치 실행 완료: 실패 (종료 코드: $RESULT)"
-fi
+# 실행된 프로세스 ID 저장
+PID=$!
+log "프로세스 ID: $PID 로 실행됨"
+
+# PID 파일 생성 (나중에 상태 확인 용도)
+echo $PID > "${SCRIPT_DIR}/logs/stock_analysis_${MODE}_${TODAY}.pid"
 
 # 가상환경 비활성화 (활성화한 경우)
 if [ -f "venv/bin/activate" ]; then
     deactivate
 fi
 
-exit $RESULT
+log "$MODE 배치 실행 요청 완료"
+exit 0
