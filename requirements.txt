@@ -16,4 +16,17 @@ asyncio>=3.4.3
 pathlib>=1.0.1
 python-dotenv>=1.0.0
 
+
+# PDF 변환 관련 패키지
+weasyprint>=60.0  # 마크다운을 PDF로 변환 (주요 방식)
+pdfkit>=1.0.0  # wkhtmltopdf 기반 PDF 변환 (대체 방식)
+reportlab>=4.0.0  # 직접 PDF 생성 (대체 방식)
+
+# 주식 데이터 관련
 pykrx
+
+# JSON 처리
+ujson>=5.8.0
+
+# 이미지 처리 (PDF 변환시 필요)
+Pillow>=10.0.0

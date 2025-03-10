@@ -1,6 +1,7 @@
 import asyncio
 import re
 import os
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -69,27 +70,57 @@ class TelegramSummaryGenerator:
                 "date": datetime.now().strftime("%Y.%m.%d")
             }
 
-    def determine_trigger_type(self, report_content):
+    def determine_trigger_type(self, stock_code: str, report_date=None):
         """
-        보고서 내용을 분석하여 트리거 유형 결정
+        트리거 결과 파일에서 해당 종목의 트리거 유형을 결정
+
+        Args:
+            stock_code: 종목 코드
+            report_date: 보고서 날짜 (YYYYMMDD)
+
+        Returns:
+            tuple: (트리거 유형, 트리거 모드)
         """
-        # 간단한 키워드 기반 트리거 유형 결정
-        content_lower = report_content.lower()
+        logger.info(f"종목 {stock_code}의 트리거 유형 결정 시작")
 
-        if "거래량" in content_lower and "폭증" in content_lower:
-            return "거래량 폭증"
-        elif "갭 상승" in content_lower:
-            return "갭 상승 강세"
-        elif "거래대금" in content_lower and "시가총액" in content_lower:
-            return "시총 대비 거래대금 이상"
-        elif "급등" in content_lower:
-            return "장중 급등"
-        elif "마감" in content_lower and "쏠림" in content_lower:
-            return "마감 쏠림"
-        else:
-            return "주목할 패턴"
+        # 날짜가 주어지지 않으면 현재 날짜 사용
+        if report_date is None:
+            report_date = datetime.now().strftime("%Y%m%d")
+        elif report_date and "." in report_date:
+            # YYYY.MM.DD 형식을 YYYYMMDD로 변환
+            report_date = report_date.replace(".", "")
 
-    ## todo : 고치자. 거래량,등락률은 가장 최신의 일자만. 관련 차트 부분은 빼자.
+        # 가능한 모드 (morning, afternoon)
+        for mode in ["morning", "afternoon"]:
+            # 트리거 결과 파일 경로
+            results_file = f"trigger_results_{mode}_{report_date}.json"
+
+            logger.info(f"트리거 결과 파일 확인: {results_file}")
+
+            if os.path.exists(results_file):
+                try:
+                    with open(results_file, 'r', encoding='utf-8') as f:
+                        results = json.load(f)
+
+                    # free와 premium 계정 모두 확인
+                    for account_type in ["free", "premium"]:
+                        account_results = results.get(account_type, {})
+
+                        # 각 트리거 유형 확인
+                        for trigger_type, stocks in account_results.items():
+                            for stock in stocks:
+                                if stock.get("code") == stock_code:
+                                    logger.info(f"종목 {stock_code}의 트리거 유형: {trigger_type}, 모드: {mode}")
+                                    return trigger_type, mode
+                except Exception as e:
+                    logger.error(f"트리거 결과 파일 읽기 오류: {e}")
+
+        # 트리거 유형을 찾지 못한 경우 기본값 반환
+        logger.warning(f"종목 {stock_code}의 트리거 유형을 결과 파일에서 찾지 못함, 기본값 사용")
+
+        # 기본 트리거 유형과 모드 (이전 방식 유지)
+        return "주목할 패턴", "unknown"
+
     async def generate_telegram_message(self, report_content, metadata, trigger_type):
         """
         텔레그램 메시지 생성
@@ -114,6 +145,9 @@ class TelegramSummaryGenerator:
                         
                         전체 메시지는 400자 내외로 작성하세요. 투자자가 즉시 활용할 수 있는 실질적인 정보에 집중하세요.
                         수치는 가능한 구체적으로 표현하고, 주관적 투자 조언이나 '추천'이라는 단어는 사용하지 마세요.
+                        
+                        {f'메시지 중간에 "⚠️ 주의: 본 정보는 장 시작 후 10분 시점 데이터 기준으로, 현재 시장 상황과 차이가 있을 수 있습니다." 문구를 반드시 포함해 주세요.' if metadata.get('trigger_mode') == 'morning' else ''}
+                        
                         메시지 끝에는 "본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다." 문구를 반드시 포함하세요.
                         """
         )
@@ -125,6 +159,7 @@ class TelegramSummaryGenerator:
         message = await llm.generate_str(
             message=f"""다음은 {metadata['stock_name']}({metadata['stock_code']}) 종목에 대한 상세 분석 보고서입니다. 
             이 종목은 {trigger_type} 트리거에 포착되었습니다. 
+            {f'※ 이 종목은 장 시작 후 10분 시점에 포착되었으며, 현재 상황과 차이가 있을 수 있습니다.' if metadata.get('trigger_mode') == 'morning' else ''}
             이 내용을 기반으로 무료 사용자를 위한 간결한 텔레그램 메시지를 생성해주세요.
             
             보고서 내용:
@@ -173,9 +208,15 @@ class TelegramSummaryGenerator:
             # 보고서 내용 읽기
             report_content = await self.read_report(report_path)
 
-            # 트리거 유형 결정
-            trigger_type = self.determine_trigger_type(report_content)
-            logger.info(f"감지된 트리거 유형: {trigger_type}")
+            # 트리거 유형과 모드 결정
+            trigger_type, trigger_mode = self.determine_trigger_type(
+                metadata['stock_code'],
+                metadata.get('date', '').replace('.', '')  # YYYY.MM.DD → YYYYMMDD
+            )
+            logger.info(f"감지된 트리거 유형: {trigger_type}, 모드: {trigger_mode}")
+
+            # 메타데이터에 트리거 모드 추가
+            metadata['trigger_mode'] = trigger_mode
 
             # 텔레그램 요약 메시지 생성
             telegram_message = await self.generate_telegram_message(

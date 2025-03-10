@@ -132,15 +132,6 @@ def normalize_and_score(df: pd.DataFrame, ratio_col: str, abs_col: str,
     # 복합 점수 기준 정렬
     return df.sort_values("복합점수", ascending=ascending)
 
-def filter_same_sector(df: pd.DataFrame, max_per_sector: int = 2) -> pd.DataFrame:
-    """
-    동일 업종/섹터에서 최대 N개 종목만 선택합니다 (과도한 쏠림 방지)
-    참고: 실제 구현은 업종 정보가 있다고 가정하고 플레이스홀더로 작성했습니다
-    """
-    # TODO: 실제 업종 정보를 가져오는 API 필요
-    # 현재는 모든 종목을 그대로 반환
-    return df
-
 def enhance_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
     종목명, 업종 등 추가 정보를 DataFrame에 추가합니다
@@ -550,10 +541,11 @@ def select_final_tickers(triggers: dict) -> dict:
     return {"free": free_result, "premium": premium_result}
 
 # --- 배치 실행 함수 ---
-def run_batch(trigger_time: str, log_level: str = "INFO"):
+def run_batch(trigger_time: str, log_level: str = "INFO", output_file: str = None):
     """
     trigger_time: "morning" 또는 "afternoon"
     log_level: "DEBUG", "INFO", "WARNING", 등 (운영 환경에서는 INFO 추천)
+    output_file: 결과를 저장할 JSON 파일 경로 (선택 사항)
     """
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
     logger.setLevel(numeric_level)
@@ -612,112 +604,70 @@ def run_batch(trigger_time: str, log_level: str = "INFO"):
     # 최종 선별 결과
     final_results = select_final_tickers(triggers)
 
-    # 무료 계정용 결과 표시
-    logger.info("=== 무료 계정용 종목 ===")
-    if not final_results["free"]:
-        logger.info("조건에 부합하는 종목이 없습니다.")
-    else:
-        total_free_tickers = 0  # 총 선택된 종목 수
-        for name, df in final_results["free"].items():
-            for ticker in df.index:
-                total_free_tickers += 1
-                종목명 = df.loc[ticker, "종목명"] if "종목명" in df.columns else ""
-                logger.info(f"[{name}] {ticker} ({종목명})")
+    # 결과를 JSON으로 저장 (요청된 경우)
+    if output_file:
+        import json
 
-                # 트리거 타입별 주요 지표 로깅
-                try:
-                    if "거래량증가율" in df.columns and name == "거래량 급증 상위주":
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래량증가율: {df.loc[ticker, '거래량증가율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원, 거래량: {df.loc[ticker, '거래량']:,}주")
-                        logger.info(f"  - 전일거래량: {prev_snapshot.loc[ticker, '거래량']:,}주")
-                    elif "갭상승률" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 갭상승률: {df.loc[ticker, '갭상승률']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                    elif "거래대금비율" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래대금/시가총액: {df.loc[ticker, '거래대금비율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원, 시가총액: {df.loc[ticker, '시가총액']/100000000:.2f}억원")
-                    elif "장중등락률" in df.columns and name == "일중 상승률 상위주":
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                    elif "마감강도" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 마감강도: {df.loc[ticker, '마감강도']:.2f}, 거래량증가율: {df.loc[ticker, '거래량증가율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                    elif "거래량증가율" in df.columns and "횡보여부" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래량증가율: {df.loc[ticker, '거래량증가율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                except Exception as e:
-                    logger.warning(f"  - 로깅 중 오류 발생: {e}")
+        # 선별된 종목 상세 정보 포함
+        output_data = {
+            "free": {},
+            "premium": {}
+        }
 
-        logger.info(f"무료 계정용 종목 수: {total_free_tickers}개")
+        # 계정 타입별 처리 (무료/유료)
+        for account_type in ["free", "premium"]:
+            for trigger_type, stocks_df in final_results[account_type].items():
+                if not stocks_df.empty:
+                    if trigger_type not in output_data[account_type]:
+                        output_data[account_type][trigger_type] = []
 
-    # 유료 계정용 결과 표시
-    logger.info("=== 유료 계정용 종목 ===")
-    if not final_results["premium"]:
-        logger.info("조건에 부합하는 종목이 없습니다.")
-    else:
-        total_premium_tickers = 0  # 총 선택된 종목 수
-        premium_tickers_set = set()  # 중복 체크용
+                    for ticker in stocks_df.index:
+                        stock_info = {
+                            "code": ticker,
+                            "name": stocks_df.loc[ticker, "종목명"] if "종목명" in stocks_df.columns else "",
+                            "current_price": float(stocks_df.loc[ticker, "종가"]) if "종가" in stocks_df.columns else 0,
+                            "change_rate": float(stocks_df.loc[ticker, "전일대비등락률"]) if "전일대비등락률" in stocks_df.columns else 0,
+                            "volume": int(stocks_df.loc[ticker, "거래량"]) if "거래량" in stocks_df.columns else 0,
+                            "trade_value": float(stocks_df.loc[ticker, "거래대금"]) if "거래대금" in stocks_df.columns else 0,
+                        }
 
-        for name, df in final_results["premium"].items():
-            for ticker in df.index:
-                if ticker in premium_tickers_set:
-                    continue  # 이미 출력된 종목은 건너뛰기
+                        # 트리거 타입별 특화 데이터 추가
+                        if "거래량증가율" in stocks_df.columns and trigger_type == "거래량 급증 상위주":
+                            stock_info["volume_increase"] = float(stocks_df.loc[ticker, "거래량증가율"])
+                        elif "갭상승률" in stocks_df.columns:
+                            stock_info["gap_rate"] = float(stocks_df.loc[ticker, "갭상승률"])
+                        elif "거래대금비율" in stocks_df.columns:
+                            stock_info["trade_value_ratio"] = float(stocks_df.loc[ticker, "거래대금비율"])
+                            stock_info["market_cap"] = float(stocks_df.loc[ticker, "시가총액"])
+                        elif "마감강도" in stocks_df.columns:
+                            stock_info["closing_strength"] = float(stocks_df.loc[ticker, "마감강도"])
 
-                premium_tickers_set.add(ticker)
-                total_premium_tickers += 1
-                종목명 = df.loc[ticker, "종목명"] if "종목명" in df.columns else ""
-                logger.info(f"[{name}] {ticker} ({종목명})")
+                        output_data[account_type][trigger_type].append(stock_info)
 
-                # 트리거 타입별 주요 지표 로깅
-                try:
-                    if "거래량증가율" in df.columns and name == "거래량 급증 상위주":
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래량증가율: {df.loc[ticker, '거래량증가율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원, 거래량: {df.loc[ticker, '거래량']:,}주")
-                        logger.info(f"  - 전일거래량: {prev_snapshot.loc[ticker, '거래량']:,}주")
-                    elif "갭상승률" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 갭상승률: {df.loc[ticker, '갭상승률']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                    elif "거래대금비율" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래대금/시가총액: {df.loc[ticker, '거래대금비율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원, 시가총액: {df.loc[ticker, '시가총액']/100000000:.2f}억원")
-                    elif "장중등락률" in df.columns and name == "일중 상승률 상위주":
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                    elif "마감강도" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 마감강도: {df.loc[ticker, '마감강도']:.2f}, 거래량증가율: {df.loc[ticker, '거래량증가율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                    elif "거래량증가율" in df.columns and "횡보여부" in df.columns:
-                        logger.info(f"  - 전일대비등락률: {df.loc[ticker, '전일대비등락률']:.2f}% (증권사 앱 표시)")
-                        logger.info(f"  - 장중등락률: {df.loc[ticker, '장중등락률']:.2f}% (시가 대비)")
-                        logger.info(f"  - 거래량증가율: {df.loc[ticker, '거래량증가율']:.2f}%")
-                        logger.info(f"  - 거래대금: {df.loc[ticker, '거래대금']/100000000:.2f}억원")
-                except Exception as e:
-                    logger.warning(f"  - 로깅 중 오류 발생: {e}")
+        # 실행 시간 및 메타데이터 추가
+        output_data["metadata"] = {
+            "run_time": datetime.datetime.now().isoformat(),
+            "trigger_mode": trigger_time,
+            "trade_date": trade_date
+        }
 
-        logger.info(f"유료 계정용 종목 수: {total_premium_tickers}개")
+        # JSON 파일 저장
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"선별 결과가 {output_file}에 저장되었습니다.")
+
+    return final_results
 
 if __name__ == "__main__":
-    # 사용법: python trigger_batch.py morning [DEBUG|INFO|...]
-    mode = sys.argv[1] if len(sys.argv) > 1 else "morning"
-    log_level = sys.argv[2] if len(sys.argv) > 2 else "INFO"
-    run_batch(mode, log_level)
+    # 사용법: python trigger_batch.py morning [DEBUG|INFO|...] [--output 파일경로]
+    import argparse
+
+    parser = argparse.ArgumentParser(description="트리거 배치 실행")
+    parser.add_argument("mode", help="실행 모드 (morning 또는 afternoon)")
+    parser.add_argument("log_level", nargs="?", default="INFO", help="로깅 레벨")
+    parser.add_argument("--output", help="결과 저장 JSON 파일 경로")
+
+    args = parser.parse_args()
+
+    run_batch(args.mode, args.log_level, args.output)

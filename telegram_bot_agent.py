@@ -53,6 +53,32 @@ class TelegramBotAgent:
             logger.error(f"텔레그램 메시지 전송 실패: {e}")
             return False
 
+    async def send_document(self, chat_id, document_path, caption=None):
+        """
+        텔레그램 채널로 파일 전송
+
+        Args:
+            chat_id (str): 텔레그램 채널 ID
+            document_path (str): 전송할 파일 경로
+            caption (str, optional): 파일 설명
+
+        Returns:
+            bool: 전송 성공 여부
+        """
+        try:
+            with open(document_path, 'rb') as document:
+                await self.bot.send_document(
+                    chat_id=chat_id,
+                    document=document,
+                    caption=caption,
+                    parse_mode="Markdown"  # Markdown 형식 지원
+                )
+            logger.info(f"파일 전송 성공: {document_path}")
+            return True
+        except TelegramError as e:
+            logger.error(f"텔레그램 파일 전송 실패: {e}")
+            return False
+
     async def process_messages_directory(self, directory, chat_id, sent_dir=None):
         """
         디렉토리 내의 모든 텔레그램 메시지 파일을 처리하여 전송
