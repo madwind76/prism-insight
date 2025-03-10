@@ -30,3 +30,5 @@ ujson>=5.8.0
 
 # 이미지 처리 (PDF 변환시 필요)
 Pillow>=10.0.0
+
+holidays
