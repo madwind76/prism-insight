@@ -31,7 +31,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # telegram_summary_agent.py에서 필요한 함수 임포트
-from telegram_summary_agent_backup import TelegramSummaryGenerator, process_all_reports
+from telegram_summary_agent import TelegramSummaryGenerator, process_all_reports
 
 # telegram_bot_agent.py에서 필요한 함수 임포트
 from telegram_bot_agent import TelegramBotAgent
