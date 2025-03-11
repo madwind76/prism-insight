@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# .pyenv 환경 활성화 (스크립트 시작 부분에 추가 - 반드시 추가!)
+PYENV_ROOT="$HOME/.pyenv"
+export PYENV_ROOT
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+
 # 로그 파일 설정
 LOG_FILE="/root/kospi-kosdaq-stock-analyzer/stock_scheduler.log"
 SCRIPT_DIR="/root/kospi-kosdaq-stock-analyzer"
@@ -15,7 +21,7 @@ cd $SCRIPT_DIR
 
 # 시장 영업일 체크
 log "주식 시장 영업일 체크 시작"
-python check_market_day.py
+/root/.pyenv/shims/python check_market_day.py
 MARKET_CHECK=$?
 
 if [ $MARKET_CHECK -ne 0 ]; then
@@ -42,7 +48,7 @@ fi
 
 # 백그라운드에서 스크립트 실행
 log "$MODE 배치 백그라운드 실행 시작"
-nohup python stock_analysis_orchestrator.py --mode $MODE --account-type $ACCOUNT_TYPE > $BATCH_LOG_FILE 2>&1 &
+nohup /root/.pyenv/shims/python stock_analysis_orchestrator.py --mode $MODE --account-type $ACCOUNT_TYPE > $BATCH_LOG_FILE 2>&1 &
 
 # 실행된 프로세스 ID 저장
 PID=$!
