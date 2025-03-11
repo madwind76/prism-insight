@@ -7,25 +7,25 @@
 - 관련 시장 데이터 및 보고서 참조하여 정확한 정보 제공
 - 친근하고 공감적인 톤으로 응답
 """
-import os
-import logging
-import re
 import asyncio
+import json
+import logging
+import os
+import re
 import signal
+import traceback
 from datetime import datetime
 from pathlib import Path
+
 from dotenv import load_dotenv
-
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    filters, ContextTypes, ConversationHandler
-)
-
 from mcp_agent.agents.agent import Agent
 from mcp_agent.app import MCPApp
 from mcp_agent.workflows.llm.augmented_llm import RequestParams
 from mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM
+from telegram import Update
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+)
 
 # 환경 변수 로드
 load_dotenv()
@@ -50,9 +50,14 @@ class TelegramAIBot:
 
     def __init__(self):
         """초기화"""
-        self.token = os.getenv("TELEGRAM_BOT_TOKEN")
+        self.token = os.getenv("TELEGRAM_AI_BOT_TOKEN")
         if not self.token:
             raise ValueError("텔레그램 봇 토큰이 설정되지 않았습니다.")
+
+        # 종목 정보 초기화
+        self.stock_map = {}
+        self.stock_name_map = {}
+        self.load_stock_map()
 
         # MCPApp 초기화
         self.app = MCPApp(name="telegram_ai_bot")
@@ -60,6 +65,35 @@ class TelegramAIBot:
         # 봇 어플리케이션 생성
         self.application = Application.builder().token(self.token).build()
         self.setup_handlers()
+
+    def load_stock_map(self):
+        """
+        종목 코드와 이름을 매핑하는 딕셔너리 로드
+        """
+        try:
+            # 종목 정보 파일 경로
+            stock_map_file = "stock_map.json"
+
+            logger.info(f"종목 매핑 정보 로드 시도: {stock_map_file}")
+
+            if os.path.exists(stock_map_file):
+                with open(stock_map_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.stock_map = data.get("code_to_name", {})
+                    self.stock_name_map = data.get("name_to_code", {})
+
+                logger.info(f"{len(self.stock_map)} 개의 종목 정보 로드 완료")
+            else:
+                logger.warning(f"종목 정보 파일이 존재하지 않습니다: {stock_map_file}")
+                # 기본 데이터를 제공 (테스트용)
+                self.stock_map = {"005930": "삼성전자", "013700": "까뮤이앤씨"}
+                self.stock_name_map = {"삼성전자": "005930", "까뮤이앤씨": "013700"}
+
+        except Exception as e:
+            logger.error(f"종목 정보 로드 실패: {e}")
+            # 기본 데이터라도 제공
+            self.stock_map = {"005930": "삼성전자", "013700": "까뮤이앤씨"}
+            self.stock_name_map = {"삼성전자": "005930", "까뮤이앤씨": "013700"}
 
     def setup_handlers(self):
         """
@@ -71,7 +105,11 @@ class TelegramAIBot:
 
         # 평가 대화 핸들러
         conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("evaluate", self.handle_evaluate_start)],
+            entry_points=[
+                CommandHandler("evaluate", self.handle_evaluate_start),
+                # 그룹 채팅을 위한 패턴 추가
+                MessageHandler(filters.Regex(r'^/evaluate(@\w+)?$'), self.handle_evaluate_start)
+            ],
             states={
                 CHOOSING_TICKER: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_ticker_input)
@@ -83,7 +121,17 @@ class TelegramAIBot:
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_period_input)
                 ],
             },
-            fallbacks=[CommandHandler("cancel", self.handle_cancel)],
+            fallbacks=[
+                CommandHandler("cancel", self.handle_cancel),
+                # 다른 명령어도 추가
+                CommandHandler("start", self.handle_cancel),
+                CommandHandler("help", self.handle_cancel)
+            ],
+            # 그룹 채팅에서 다른 사용자의 메시지 구분
+            per_chat=False,
+            per_user=True,
+            # 대화 시간 제한 (초)
+            # conversation_timeout=300,
         )
         self.application.add_handler(conv_handler)
 
@@ -94,6 +142,54 @@ class TelegramAIBot:
 
         # 오류 핸들러
         self.application.add_error_handler(self.handle_error)
+
+    def is_stock_inquiry(self, message_text):
+        """
+        메시지가 특정 종목에 대한 질문인지 확인
+
+        Args:
+            message_text (str): 사용자 메시지
+
+        Returns:
+            bool: 종목 질문 여부
+        """
+        # 종목 코드 패턴 (6자리 숫자)
+        if re.search(r'\b\d{6}\b', message_text):
+            return True
+
+        # 종목명 포함 여부 확인
+        for stock_name in self.stock_name_map.keys():
+            if stock_name in message_text:
+                return True
+
+        # 종목 관련 키워드 확인
+        stock_keywords = ["주가", "종목", "주식", "전망", "실적", "투자", "매수", "매도"]
+        return any(keyword in message_text for keyword in stock_keywords)
+
+    def extract_stock_info(self, message_text):
+        """
+        메시지에서 종목 코드나 이름 추출
+
+        Args:
+            message_text (str): 사용자 메시지
+
+        Returns:
+            tuple: (종목 코드, 종목 이름) 또는 (None, None)
+        """
+        # 종목 코드 패턴 (6자리 숫자) 찾기
+        code_match = re.search(r'\b(\d{6})\b', message_text)
+        if code_match:
+            stock_code = code_match.group(1)
+            stock_name = self.stock_map.get(stock_code)
+            if stock_name:
+                return stock_code, stock_name
+
+        # 종목명 찾기
+        for stock_name, stock_code in self.stock_name_map.items():
+            if stock_name in message_text:
+                return stock_code, stock_name
+
+        return None, None
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """시작 명령어 처리"""
@@ -128,29 +224,48 @@ class TelegramAIBot:
 
     async def handle_evaluate_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """평가 명령어 처리 - 첫 단계"""
+        # 그룹 채팅인지 개인 채팅인지 확인
+        is_group = update.effective_chat.type in ["group", "supergroup"]
+        user_name = update.effective_user.first_name
+
+        logger.info(f"평가 명령 시작 - 사용자: {user_name}, 채팅타입: {'그룹' if is_group else '개인'}")
+
+        # 그룹 채팅에서는 사용자 이름을 언급
+        greeting = f"{user_name}님, " if is_group else ""
+
         await update.message.reply_text(
-            "보유하신 종목의 코드나 이름을 입력해주세요. \n"
+            f"{greeting}보유하신 종목의 코드나 이름을 입력해주세요. \n"
             "예: 005930 또는 삼성전자"
         )
         return CHOOSING_TICKER
 
     async def handle_ticker_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """종목 입력 처리"""
-        ticker = update.message.text.strip()
+        user_id = update.effective_user.id
+        user_input = update.message.text.strip()
+        logger.info(f"종목 입력 받음 - 사용자: {user_id}, 입력: {user_input}")
 
-        # 간단한 종목 코드 검증 (6자리 숫자)
-        if re.match(r'^\d{6}$', ticker):
-            context.user_data['ticker'] = ticker
-        else:
-            # 종목명으로 입력한 경우, 실제 코드로 변환해야 함
-            # 여기서는 간단하게 처리 (실제로는 API 호출 또는 DB 조회 필요)
-            context.user_data['ticker_name'] = ticker
-            context.user_data['ticker'] = "000000"  # 임시 코드 (실제로는 맵핑 필요)
+        # 종목 코드 또는 이름을 처리
+        stock_code, stock_name, error_message = await self.get_stock_code(user_input)
+
+        if error_message:
+            # 오류가 있으면 사용자에게 알리고 다시 입력 받음
+            await update.message.reply_text(error_message)
+            return CHOOSING_TICKER
+
+        # 종목 정보 저장
+        context.user_data['ticker'] = stock_code
+        context.user_data['ticker_name'] = stock_name
+
+        logger.info(f"종목 선택: {stock_name} ({stock_code})")
 
         await update.message.reply_text(
+            f"{stock_name} ({stock_code}) 종목을 선택하셨습니다.\n\n"
             f"평균 매수가를 입력해주세요. (숫자만 입력)\n"
             f"예: 68500"
         )
+
+        logger.info(f"상태 전환: ENTERING_AVGPRICE - 사용자: {user_id}")
         return ENTERING_AVGPRICE
 
     async def handle_avgprice_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -223,32 +338,186 @@ class TelegramAIBot:
         )
         return ConversationHandler.END
 
+    async def handle_stock_inquiry(self, update, context, stock_code, stock_name):
+        """
+        종목 관련 질문 처리
+
+        Args:
+            update (Update): 텔레그램 업데이트 객체
+            context (CallbackContext): 콜백 컨텍스트
+            stock_code (str): 종목 코드
+            stock_name (str): 종목 이름
+        """
+        # 응답 대기 메시지
+        waiting_message = await update.message.reply_text(
+            f"{stock_name} 종목에 대한 정보를 분석 중입니다... 잠시만 기다려주세요."
+        )
+
+        # 최신 보고서 찾기
+        latest_report = self.find_latest_report(stock_code)
+
+        # AI 응답 생성
+        try:
+            # 사용자 질문 추출
+            question = update.message.text
+
+            # 종목 정보와 질문을 바탕으로 AI 응답 생성
+            response = await self.generate_stock_inquiry_response(
+                stock_code, stock_name, question, latest_report
+            )
+
+            # 대기 메시지 삭제
+            try:
+                await waiting_message.delete()
+            except Exception as e:
+                logger.warning(f"대기 메시지 삭제 실패: {e}")
+
+            # 응답 전송
+            await update.message.reply_text(response)
+
+        except Exception as e:
+            logger.error(f"종목 질의 응답 생성 중 오류: {e}")
+
+            # 대기 메시지 삭제 시도
+            try:
+                await waiting_message.delete()
+            except:
+                pass
+
+            await update.message.reply_text(
+                f"죄송합니다. {stock_name} 종목에 대한 정보를 분석하는 중 오류가 발생했습니다. 다시 시도해주세요."
+            )
+
+    async def generate_stock_inquiry_response(self, ticker, ticker_name, question, report_path=None):
+        """
+        종목 질의에 대한 AI 응답 생성
+
+        Args:
+            ticker (str): 종목 코드
+            ticker_name (str): 종목 이름
+            question (str): 사용자 질문
+            report_path (str, optional): 보고서 파일 경로
+
+        Returns:
+            str: AI 응답
+        """
+        try:
+            async with self.app.run() as app:
+                logger = app.logger
+
+                # 에이전트 생성
+                agent = Agent(
+                    name="stock_inquiry_agent",
+                    instruction=f"""당신은 주식 종목 정보 제공 전문가입니다. 사용자의 종목 관련 질문에 전문적이고 친근한 톤으로 응답해야 합니다.
+                    
+                    ## 정보
+                    - 종목 코드: {ticker}
+                    - 종목 이름: {ticker_name}
+                    - 사용자 질문: {question}
+                    
+                    ## 응답 스타일
+                    - 친한 친구가 조언하는 것처럼 편안하고 공감적인 톤 유지
+                    - "~님"이나 존칭 대신 친구에게 말하듯 casual한 표현 사용
+                    - 질문의 의도를 정확히 파악하고 핵심에 집중
+                    - 전문 지식을 바탕으로 한 실질적인 정보 제공
+                    """,
+                    server_names=["exa", "kospi_kosdaq"]
+                )
+
+                # LLM 연결
+                llm = await agent.attach_llm(OpenAIAugmentedLLM)
+
+                # 보고서 내용 확인
+                report_content = ""
+                if report_path and os.path.exists(report_path):
+                    with open(report_path, 'r', encoding='utf-8') as f:
+                        report_content = f.read()
+
+                # 응답 생성
+                response = await llm.generate_str(
+                    message=f"""다음 종목에 관한 질문에 답변해주세요:
+                    
+                    ## 정보
+                    - 종목 코드: {ticker}
+                    - 종목 이름: {ticker_name}
+                    - 사용자 질문: {question}
+                    
+                    ## 참고 자료
+                    {report_content if report_content else "관련 보고서가 없습니다. 일반적인 시장 지식과 최근 동향을 바탕으로 답변해주세요."}
+                    """,
+                    request_params=RequestParams(
+                        model="gpt-4o-mini",
+                        maxTokens=1500,
+                        max_iterations=1,
+                        parallel_tool_calls=False,
+                        use_history=False
+                    )
+                )
+
+                return response
+
+        except Exception as e:
+            logger.error(f"종목 질의 응답 생성 중 오류: {str(e)}")
+            return f"죄송합니다. {ticker_name} 종목에 대한 정보를 분석하는 중 오류가 발생했습니다. 다시 시도해주세요."
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """일반 메시지 처리"""
         message_text = update.message.text
+        logger.info(f"사용자 메시지 수신: {message_text[:50]}...")
+
+        # 특정 종목에 대한 질문인지 확인
+        if self.is_stock_inquiry(message_text):
+            # 종목 코드 또는 이름 추출
+            stock_code, stock_name = self.extract_stock_info(message_text)
+            if stock_code:
+                # 종목에 대한 AI 응답 생성
+                await self.handle_stock_inquiry(update, context, stock_code, stock_name)
+                return
 
         # 응답 대기 메시지
         waiting_message = await update.message.reply_text(
             "질문을 분석 중입니다... 잠시만 기다려주세요."
         )
 
-        # AI 응답 생성
-        response = await self.generate_conversation_response(message_text)
+        # AI 응답 생성 (일반 대화용)
+        try:
+            response = await self.generate_conversation_response(message_text)
 
-        # 대기 메시지 삭제
-        await waiting_message.delete()
+            # 대기 메시지 삭제
+            try:
+                await waiting_message.delete()
+            except Exception as e:
+                logger.warning(f"대기 메시지 삭제 실패: {e}")
 
-        # 응답 전송
-        await update.message.reply_text(response)
+            # 응답 전송
+            await update.message.reply_text(response)
+
+        except Exception as e:
+            logger.error(f"응답 생성 중 오류: {e}")
+            await update.message.reply_text(
+                "죄송합니다. 응답 생성 중 오류가 발생했습니다. 다시 시도해주세요."
+            )
 
     async def handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """오류 처리"""
-        logger.error(f"오류 발생: {context.error}")
+        error_msg = str(context.error)
+        logger.error(f"오류 발생: {error_msg}")
 
-        if update:
-            await update.message.reply_text(
-                "죄송합니다. 오류가 발생했습니다. 다시 시도해주세요."
-            )
+        # 사용자에게 보여줄 오류 메시지
+        user_msg = "죄송합니다. 오류가 발생했습니다. 다시 시도해주세요."
+
+        # 타임아웃 오류 처리
+        if "timed out" in error_msg.lower():
+            user_msg = "요청 처리 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요."
+        # 권한 오류 처리
+        elif "permission" in error_msg.lower():
+            user_msg = "봇이 메시지를 보낼 권한이 없습니다. 그룹 설정을 확인해주세요."
+        # 다양한 오류 정보 로깅
+        logger.error(f"오류 상세 정보: {traceback.format_exc()}")
+
+        # 오류 응답 전송
+        if update and update.effective_message:
+            await update.effective_message.reply_text(user_msg)
 
     def find_latest_report(self, ticker):
         """
@@ -273,6 +542,54 @@ class TelegramAIBot:
         latest_report = max(report_files, key=lambda p: p.stat().st_mtime)
 
         return str(latest_report)
+
+    async def get_stock_code(self, stock_input):
+        """
+        종목명 또는 코드를 입력받아 종목 코드로 변환
+
+        Args:
+            stock_input (str): 종목 코드 또는 이름
+
+        Returns:
+            tuple: (종목 코드, 종목 이름, 오류 메시지)
+        """
+        stock_input = stock_input.strip()
+
+        # 이미 종목 코드인 경우 (6자리 숫자)
+        if re.match(r'^\d{6}$', stock_input):
+            stock_code = stock_input
+            stock_name = self.stock_map.get(stock_code)
+
+            if stock_name:
+                return stock_code, stock_name, None
+            else:
+                return stock_code, f"종목_{stock_code}", "해당 종목 코드에 대한 정보가 없습니다. 코드가 정확한지 확인해주세요."
+
+        # 종목명으로 입력한 경우 - 정확히 일치하는 경우 확인
+        if stock_input in self.stock_name_map:
+            stock_code = self.stock_name_map[stock_input]
+            return stock_code, stock_input, None
+
+        # 종목명 부분 일치 검색
+        possible_matches = []
+        for name, code in self.stock_name_map.items():
+            if stock_input.lower() in name.lower():
+                possible_matches.append((name, code))
+
+        if len(possible_matches) == 1:
+            # 단일 일치 항목이 있으면 사용
+            stock_name, stock_code = possible_matches[0]
+            return stock_code, stock_name, None
+        elif len(possible_matches) > 1:
+            # 여러 일치 항목이 있으면 오류 메시지 반환
+            match_info = "\n".join([f"{name} ({code})" for name, code in possible_matches[:5]])
+            if len(possible_matches) > 5:
+                match_info += f"\n... 외 {len(possible_matches)-5}개"
+
+            return None, None, f"'{stock_input}'에 여러 일치하는 종목이 있습니다. 정확한 종목명이나 종목코드를 입력해주세요:\n{match_info}"
+        else:
+            # 일치하는 항목이 없으면 오류 메시지 반환
+            return None, None, f"'{stock_input}'에 해당하는 종목을 찾을 수 없습니다. 정확한 종목명이나 종목코드를 입력해주세요."
 
     async def generate_evaluation_response(self, ticker, ticker_name, avg_price, period, report_path=None):
         """
@@ -327,7 +644,7 @@ class TelegramAIBot:
                                 - 투자 결정은 최종적으로 사용자가 하도록 유도
                                 - 불확실한 내용은 정직하게 인정
                                 """,
-                    server_names=["exa"]
+                    server_names=["exa", "kospi_kosdaq"]
                 )
 
                 # LLM 연결
@@ -353,7 +670,7 @@ class TelegramAIBot:
                             {report_content if report_content else "관련 보고서가 없습니다. 일반적인 시장 지식과 최근 동향을 바탕으로 평가해주세요."}
                             """,
                     request_params=RequestParams(
-                        model="gpt-4o",
+                        model="gpt-4o-mini",
                         maxTokens=1500,
                         max_iterations=1,
                         parallel_tool_calls=False,
@@ -419,7 +736,7 @@ class TelegramAIBot:
                             질문: {message_text}
                             """,
                     request_params=RequestParams(
-                        model="gpt-4o",
+                        model="gpt-4o-mini",
                         maxTokens=1500,
                         max_iterations=1,
                         parallel_tool_calls=False,
@@ -457,7 +774,7 @@ class TelegramAIBot:
             logger.info("텔레그램 AI 대화형 봇이 종료되었습니다.")
 
 
-async def shutdown(sig, loop):
+async def shutdown(sig, loop, *args):
     """Cleanup tasks tied to the service's shutdown."""
     logger.info(f"Received signal {sig.name}, shutting down...")
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -477,10 +794,12 @@ async def main():
     # 시그널 핸들러 설정
     loop = asyncio.get_event_loop()
     signals = (signal.SIGINT, signal.SIGTERM)
+
+    def create_signal_handler(sig):
+        return lambda: asyncio.create_task(shutdown(sig, loop))
+
     for s in signals:
-        loop.add_signal_handler(
-            s, lambda s=s: asyncio.create_task(shutdown(s, loop))
-        )
+        loop.add_signal_handler(s, create_signal_handler(s))
 
     bot = TelegramAIBot()
     await bot.run()

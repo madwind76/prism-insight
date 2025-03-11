@@ -226,7 +226,7 @@ class TelegramSummaryGenerator:
             prompt_message += "\n이 종목은 장 시작 후 10분 시점에 포착되었으며, 현재 상황과 차이가 있을 수 있습니다."
         
         # 평가-최적화 워크플로우를 사용하여 텔레그램 메시지 생성
-        message = await evaluator_optimizer.generate_str(
+        response = await evaluator_optimizer.generate_str(
             message=prompt_message,
             request_params=RequestParams(
                 model="gpt-4o",
@@ -237,8 +237,33 @@ class TelegramSummaryGenerator:
             )
         )
         
+        # API 응답에서 실제 메시지 내용 추출
+        # 응답 객체가 여러 형태일 수 있으므로 다양한 경우를 처리
+        message_content = ""
+        
+        # 응답 객체가 문자열인 경우
+        if isinstance(response, str):
+            message_content = response
+        # 객체에 content 속성이 있는 경우
+        elif hasattr(response, 'content') and response.content is not None:
+            message_content = response.content
+        # ChatCompletionMessage 같은 객체에서 텍스트 추출 시도
+        else:
+            # 모든 유형의 응답을 문자열로 변환하여 정규식으로 실제 내용 추출
+            response_str = str(response)
+            # 메시지 내용을 추출하기 위한 패턴
+            # 일반적으로 텔레그램 메시지는 이모지로 시작하고, 마지막에 투자 책임 문구가 있음
+            content_match = re.search(r'(📊|📈|📉|💰|⚠️|🔍).*?본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다\.', response_str, re.DOTALL)
+            
+            if content_match:
+                message_content = content_match.group(0)
+            else:
+                # 정규식으로 찾지 못한 경우, response_str을 그대로 사용하고 로그 남김
+                logger.warning("텔레그램 메시지 내용을 추출할 수 없음. 전체 응답을 사용합니다.")
+                message_content = response_str
+        
         logger.info("텔레그램 메시지 생성 및 평가 완료")
-        return message
+        return message_content
 
     def save_telegram_message(self, message, output_path):
         """
