@@ -87,7 +87,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
     ref_date = datetime.strptime(reference_date, "%Y%m%d")
 
     # 기간 계산
-    max_years = 2
+    max_years = 1
     max_years_ago = (ref_date - timedelta(days=365*max_years)).strftime("%Y%m%d")
     six_months_ago = (ref_date - timedelta(days=180)).strftime("%Y%m%d")
 
