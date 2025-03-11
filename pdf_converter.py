@@ -3,9 +3,9 @@
 마크다운 파일을 PDF로 변환하는 모듈
 
 다양한 변환 방식 제공:
-1. weasyprint 기반 HTML 중간 변환
-2. pdfkit 기반 HTML 중간 변환 (wkhtmltopdf 필요)
-3. reportlab 직접 렌더링
+1. pdfkit 기반 HTML 중간 변환 (wkhtmltopdf 필요)
+2. reportlab 직접 렌더링
+3. mdpdf 간편 변환 (추가됨)
 """
 import os
 import logging
@@ -141,36 +141,11 @@ def markdown_to_html(md_file_path, add_css=True):
         logger.error(f"HTML 변환 중 오류: {str(e)}")
         raise
 
-def markdown_to_pdf_weasyprint(md_file_path, pdf_file_path):
-    """
-    WeasyPrint를 사용하여 마크다운을 PDF로 변환
-
-    Args:
-        md_file_path (str): 마크다운 파일 경로
-        pdf_file_path (str): 출력 PDF 파일 경로
-    """
-    try:
-        # WeasyPrint 임포트 (설치 필요: pip install weasyprint)
-        from weasyprint import HTML
-
-        # 마크다운을 HTML로 변환
-        html_content = markdown_to_html(md_file_path)
-
-        # HTML을 PDF로 변환
-        HTML(string=html_content).write_pdf(pdf_file_path)
-
-        logger.info(f"WeasyPrint로 PDF 변환 완료: {pdf_file_path}")
-
-    except ImportError:
-        logger.error("WeasyPrint 라이브러리가 설치되지 않았습니다. pip install weasyprint로 설치하세요.")
-        raise
-    except Exception as e:
-        logger.error(f"WeasyPrint 변환 중 오류: {str(e)}")
-        raise
-
 def markdown_to_pdf_pdfkit(md_file_path, pdf_file_path):
     """
     pdfkit(wkhtmltopdf)를 사용하여 마크다운을 PDF로 변환
+    
+    Linux 설치 방법: dnf install wkhtmltopdf
 
     Args:
         md_file_path (str): 마크다운 파일 경로
@@ -337,35 +312,62 @@ def markdown_to_pdf_reportlab(md_file_path, pdf_file_path):
         logger.error(f"ReportLab 변환 중 오류: {str(e)}")
         raise
 
-def markdown_to_pdf(md_file_path, pdf_file_path, method='weasyprint'):
+def markdown_to_pdf_mdpdf(md_file_path, pdf_file_path):
+    """
+    mdpdf 라이브러리를 사용하여 마크다운을 PDF로 변환
+    
+    설치: pip install mdpdf
+
+    Args:
+        md_file_path (str): 마크다운 파일 경로
+        pdf_file_path (str): 출력 PDF 파일 경로
+    """
+    try:
+        # mdpdf 임포트 (설치 필요: pip install mdpdf)
+        from mdpdf import MarkdownPdf
+        
+        # 마크다운을 PDF로 변환
+        md = MarkdownPdf()
+        md.convert(md_file_path, pdf_file_path)
+        
+        logger.info(f"mdpdf로 PDF 변환 완료: {pdf_file_path}")
+        
+    except ImportError:
+        logger.error("mdpdf 라이브러리가 설치되지 않았습니다. pip install mdpdf로 설치하세요.")
+        raise
+    except Exception as e:
+        logger.error(f"mdpdf 변환 중 오류: {str(e)}")
+        raise
+
+def markdown_to_pdf(md_file_path, pdf_file_path, method='pdfkit'):
     """
     마크다운 파일을 PDF로 변환 (기본 메서드 선택)
 
     Args:
         md_file_path (str): 마크다운 파일 경로
         pdf_file_path (str): 출력 PDF 파일 경로
-        method (str): 변환 방식 ('weasyprint', 'pdfkit', 'reportlab')
+        method (str): 변환 방식 ('pdfkit', 'reportlab', 'mdpdf')
     """
     logger.info(f"마크다운 PDF 변환 시작: {md_file_path} -> {pdf_file_path}")
 
     try:
-        if method == 'weasyprint':
-            markdown_to_pdf_weasyprint(md_file_path, pdf_file_path)
-        elif method == 'pdfkit':
+        if method == 'pdfkit':
             markdown_to_pdf_pdfkit(md_file_path, pdf_file_path)
         elif method == 'reportlab':
             markdown_to_pdf_reportlab(md_file_path, pdf_file_path)
+        elif method == 'mdpdf':
+            markdown_to_pdf_mdpdf(md_file_path, pdf_file_path)
         else:
-            # 기본값은 weasyprint 시도 후 실패하면 pdfkit, 마지막으로 reportlab
+            # 기본값은 pdfkit 시도 후 실패하면 reportlab, 마지막으로 mdpdf
             try:
-                markdown_to_pdf_weasyprint(md_file_path, pdf_file_path)
+                markdown_to_pdf_pdfkit(md_file_path, pdf_file_path)
             except Exception as e1:
-                logger.warning(f"WeasyPrint 실패, pdfkit 시도: {str(e1)}")
+                logger.warning(f"pdfkit 실패, ReportLab 시도: {str(e1)}")
                 try:
-                    markdown_to_pdf_pdfkit(md_file_path, pdf_file_path)
-                except Exception as e2:
-                    logger.warning(f"pdfkit 실패, ReportLab 시도: {str(e2)}")
                     markdown_to_pdf_reportlab(md_file_path, pdf_file_path)
+                except Exception as e2:
+                    logger.warning(f"ReportLab 실패, mdpdf 시도: {str(e2)}")
+                    markdown_to_pdf_mdpdf(md_file_path, pdf_file_path)
 
     except Exception as e:
         logger.error(f"PDF 변환 실패: {str(e)}")

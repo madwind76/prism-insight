@@ -11,6 +11,7 @@ import os
 import logging
 import re
 import asyncio
+import signal
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -70,7 +71,7 @@ class TelegramAIBot:
 
         # 평가 대화 핸들러
         conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("평가", self.handle_evaluate_start)],
+            entry_points=[CommandHandler("evaluate", self.handle_evaluate_start)],
             states={
                 CHOOSING_TICKER: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_ticker_input)
@@ -82,7 +83,7 @@ class TelegramAIBot:
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_period_input)
                 ],
             },
-            fallbacks=[CommandHandler("취소", self.handle_cancel)],
+            fallbacks=[CommandHandler("cancel", self.handle_cancel)],
         )
         self.application.add_handler(conv_handler)
 
@@ -100,7 +101,7 @@ class TelegramAIBot:
         await update.message.reply_text(
             f"안녕하세요, {user.first_name}님! 저는 주식 분석 AI 봇입니다.\n\n"
             "다음과 같은 방법으로 저와 대화할 수 있습니다:\n"
-            "- /평가 명령어로 보유 종목에 대한 평가를 요청\n"
+            "- /evaluate 명령어로 보유 종목에 대한 평가를 요청\n"
             "- 종목이나 시장에 관한 질문을 직접 물어보기\n\n"
             "더 자세한 정보는 /help 명령어를 입력해주세요."
         )
@@ -112,8 +113,8 @@ class TelegramAIBot:
             "<b>기본 명령어:</b>\n"
             "/start - 봇 시작\n"
             "/help - 도움말 보기\n"
-            "/평가 - 보유 종목 평가 시작\n"
-            "/취소 - 현재 진행 중인 대화 취소\n\n"
+            "/evaluate - 보유 종목 평가 시작\n"
+            "/cancel - 현재 진행 중인 대화 취소\n\n"
             "<b>보유 종목 평가 방법:</b>\n"
             "1. /평가 명령어 입력\n"
             "2. 종목 코드 또는 이름 입력\n"
@@ -218,7 +219,7 @@ class TelegramAIBot:
         context.user_data.clear()
 
         await update.message.reply_text(
-            "평가 요청이 취소되었습니다. 다시 시작하려면 /평가 명령어를 입력해주세요."
+            "평가 요청이 취소되었습니다. 다시 시작하려면 /evaluate 명령어를 입력해주세요."
         )
         return ConversationHandler.END
 
@@ -443,7 +444,11 @@ class TelegramAIBot:
 
         try:
             # 봇이 중단될 때까지 실행 유지
-            await self.application.updater.stop_polling()  # 제어가 여기서 유지됨
+            # 무한 대기하기 위한 간단한 방법
+            while True:
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            pass
         finally:
             # 종료 시 리소스 정리
             await self.application.stop()
@@ -451,8 +456,32 @@ class TelegramAIBot:
 
             logger.info("텔레그램 AI 대화형 봇이 종료되었습니다.")
 
+
+async def shutdown(sig, loop):
+    """Cleanup tasks tied to the service's shutdown."""
+    logger.info(f"Received signal {sig.name}, shutting down...")
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+    for task in tasks:
+        task.cancel()
+
+    logger.info(f"Cancelling {len(tasks)} outstanding tasks")
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop.stop()
+
 # 메인 실행 부분
 async def main():
+    """
+    메인 함수
+    """
+    # 시그널 핸들러 설정
+    loop = asyncio.get_event_loop()
+    signals = (signal.SIGINT, signal.SIGTERM)
+    for s in signals:
+        loop.add_signal_handler(
+            s, lambda s=s: asyncio.create_task(shutdown(s, loop))
+        )
+
     bot = TelegramAIBot()
     await bot.run()
 

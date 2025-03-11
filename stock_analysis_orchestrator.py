@@ -177,7 +177,7 @@ class StockAnalysisOrchestrator:
         logger.info(f"{len(report_paths)}개 보고서 텔레그램 메시지 생성 시작")
 
         # 텔레그램 요약 생성기 모듈 임포트
-        from telegram_summary_agent import TelegramSummaryGenerator
+        from telegram_summary_agent_backup import TelegramSummaryGenerator
 
         # 요약 생성기 초기화
         generator = TelegramSummaryGenerator()
