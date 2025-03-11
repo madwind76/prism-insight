@@ -141,7 +141,9 @@ class TelegramSummaryGenerator:
                         
                         1. 이모지와 함께 트리거 유형 표시 (📊, 📈, 💰 등 적절한 이모지)
                         2. 종목명(코드) 정보 및 간략한 사업 설명 (1-2문장)
-                        3. 핵심 거래 정보 - 현재 날짜({current_date}) 기준으로 통일하여 작성:
+                        3. 핵심 거래 정보 - 현재 날짜({current_date}) 기준으로 통일하여 작성하고, 
+                            get_stock_ohlcv tool을 사용하여 현재 날짜({current_date})로부터 
+                            약 5일간의 데이터를 조회해서 메모리에 저장한 뒤 참고하여 작성합니다.:
                            - 현재가
                            - 전일 대비 등락률
                            - 최근 거래량 (전일 대비 증감 퍼센트 포함)
@@ -156,7 +158,8 @@ class TelegramSummaryGenerator:
                         {warning_message}
                         
                         메시지 끝에는 "본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다." 문구를 반드시 포함하세요.
-                        """
+                        """,
+            server_names=["kospi_kosdaq"]
         )
     
     def create_evaluator_agent(self):
@@ -184,7 +187,8 @@ class TelegramSummaryGenerator:
                         - 각 기준별 세부 평가
                         - 개선을 위한 구체적인 제안
                         - 특히 할루시네이션이 있다면 명확하게 지적
-                        """
+                        """,
+            server_names=["kospi_kosdaq"]
         )
 
     async def generate_telegram_message(self, report_content, metadata, trigger_type):
