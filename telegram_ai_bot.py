@@ -31,12 +31,17 @@ from telegram.ext import (
 load_dotenv()
 
 # 로거 설정
+from logging.handlers import RotatingFileHandler
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(f"ai_bot_{datetime.now().strftime('%Y%m%d')}.log")
+        RotatingFileHandler(
+            f"ai_bot_{datetime.now().strftime('%Y%m%d')}.log",
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5
+        )
     ]
 )
 logger = logging.getLogger(__name__)
@@ -58,6 +63,8 @@ class TelegramAIBot:
         self.stock_map = {}
         self.stock_name_map = {}
         self.load_stock_map()
+
+        self.stop_event = asyncio.Event()
 
         # MCPApp 초기화
         self.app = MCPApp(name="telegram_ai_bot")
@@ -131,7 +138,7 @@ class TelegramAIBot:
             per_chat=False,
             per_user=True,
             # 대화 시간 제한 (초)
-            # conversation_timeout=300,
+            conversation_timeout=300,
         )
         self.application.add_handler(conv_handler)
 
@@ -762,8 +769,7 @@ class TelegramAIBot:
         try:
             # 봇이 중단될 때까지 실행 유지
             # 무한 대기하기 위한 간단한 방법
-            while True:
-                await asyncio.sleep(1)
+            await self.stop_event.wait()
         except asyncio.CancelledError:
             pass
         finally:
