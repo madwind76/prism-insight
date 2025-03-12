@@ -1,7 +1,7 @@
 streamlit>=1.10.0
 pandas
 numpy
-mcp-agent
+mcp-agent>=0.0.8
 requests
 aiohttp
 python-dateutil
@@ -11,7 +11,6 @@ anthropic
 markdown>=3.3.0
 python-telegram-bot>=20.0
 asyncio>=3.4.3
-text
 
 # 파일 처리 및 로깅
 pathlib>=1.0.1
