@@ -526,4 +526,19 @@ async def main():
         await orchestrator.run_full_pipeline("afternoon", args.account_type)
 
 if __name__ == "__main__":
+    import threading
+
+    # 30분 후에 프로세스를 종료하는 타이머 함수
+    def exit_after_timeout():
+        import time
+        import os
+        import signal
+        time.sleep(1800)  # 30분 대기
+        logger.warning("30분 타임아웃 도달: 프로세스 강제 종료")
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    # 백그라운드 스레드로 타이머 시작
+    timer_thread = threading.Thread(target=exit_after_timeout, daemon=True)
+    timer_thread.start()
+
     asyncio.run(main())

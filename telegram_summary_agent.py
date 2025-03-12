@@ -234,33 +234,57 @@ class TelegramSummaryGenerator:
             )
         )
 
-        # API 응답에서 실제 메시지 내용 추출
-        # 응답 객체가 여러 형태일 수 있으므로 다양한 경우를 처리
-        message_content = ""
+        # 응답 처리 - 개선된 방식
+        logger.info(f"응답 유형: {type(response)}")
 
-        # 응답 객체가 문자열인 경우
+        # 응답이 문자열인 경우 (가장 이상적인 케이스)
         if isinstance(response, str):
-            message_content = response
-        # 객체에 content 속성이 있는 경우
-        elif hasattr(response, 'content') and response.content is not None:
-            message_content = response.content
-        # ChatCompletionMessage 같은 객체에서 텍스트 추출 시도
-        else:
-            # 모든 유형의 응답을 문자열로 변환하여 정규식으로 실제 내용 추출
-            response_str = str(response)
-            # 메시지 내용을 추출하기 위한 패턴
-            # 일반적으로 텔레그램 메시지는 이모지로 시작하고, 마지막에 투자 책임 문구가 있음
-            content_match = re.search(r'(📊|📈|📉|💰|⚠️|🔍).*?본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다\.', response_str, re.DOTALL)
+            logger.info("응답이 문자열 형식입니다.")
+            return response
 
-            if content_match:
-                message_content = content_match.group(0)
-            else:
-                # 정규식으로 찾지 못한 경우, response_str을 그대로 사용하고 로그 남김
-                logger.warning("텔레그램 메시지 내용을 추출할 수 없음. 전체 응답을 사용합니다.")
-                message_content = response_str
+        # OpenAI API의 응답 객체인 경우 (content 속성이 있음)
+        if hasattr(response, 'content') and response.content is not None:
+            logger.info("응답에 content 속성이 있습니다.")
+            return response.content
 
-        logger.info("텔레그램 메시지 생성 및 평가 완료")
-        return message_content
+        # ChatCompletionMessage 케이스 - tool_calls가 있는 경우
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            logger.info("응답에 tool_calls가 있습니다.")
+
+            # tool_calls 정보는 무시하고, function_call 결과가 있으면 그것을 반환
+            if hasattr(response, 'function_call') and response.function_call:
+                logger.info("응답에 function_call 결과가 있습니다.")
+                return f"함수 호출 결과: {response.function_call}"
+
+            # 이 부분에서는 후속 처리를 위해 텍스트 형식의 응답만 생성
+            # 실제 tool_calls 처리는 별도 로직으로 구현 필요
+            return "도구 호출 결과에서 텍스트를 추출할 수 없습니다. 관리자에게 문의하세요."
+
+        # 마지막 시도: 문자열로 변환하고 정규식으로 메시지 형식 추출
+        response_str = str(response)
+        logger.debug(f"정규식 적용 전 응답 문자열: {response_str[:100]}...")
+
+        # 정규식으로 텔레그램 메시지 형식 추출 시도
+        content_match = re.search(r'(📊|📈|📉|💰|⚠️|🔍).*?본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다\.', response_str, re.DOTALL)
+
+        if content_match:
+            logger.info("정규식으로 메시지 내용을 추출했습니다.")
+            return content_match.group(0)
+
+        # 정규식으로도 찾지 못한 경우, 기본 메시지 반환
+        logger.warning("응답에서 유효한 텔레그램 메시지를 추출할 수 없습니다.")
+
+        # 기본 메시지 생성
+        default_message = f"""📊 {metadata['stock_name']}({metadata['stock_code']}) - 분석 요약
+        
+    1. 현재 주가: (정보 없음)
+    2. 최근 동향: (정보 없음)
+    3. 주요 체크포인트: 상세 분석 보고서를 참고하세요.
+    
+    ⚠️ 자동 생성 메시지 오류로 인해 상세 정보를 표시할 수 없습니다. 전체 보고서를 확인해 주세요.
+    본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다."""
+
+        return default_message
 
     def save_telegram_message(self, message, output_path):
         """
