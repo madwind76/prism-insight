@@ -240,7 +240,19 @@ class TelegramSummaryGenerator:
         # 응답이 문자열인 경우 (가장 이상적인 케이스)
         if isinstance(response, str):
             logger.info("응답이 문자열 형식입니다.")
-            return response
+            # 이미 메시지 형식인지 확인
+            if response.startswith(('📊', '📈', '📉', '💰', '⚠️', '🔍')):
+                return response
+
+            # 파이썬 객체 표현 찾아서 제거
+            cleaned_response = re.sub(r'[A-Za-z]+\([^)]*\)', '', response)
+
+            # 실제 메시지 내용만 추출 시도
+            emoji_start = re.search(r'(📊|📈|📉|💰|⚠️|🔍)', cleaned_response)
+            message_end = re.search(r'본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다\.', cleaned_response)
+
+            if emoji_start and message_end:
+                return cleaned_response[emoji_start.start():message_end.end()]
 
         # OpenAI API의 응답 객체인 경우 (content 속성이 있음)
         if hasattr(response, 'content') and response.content is not None:
