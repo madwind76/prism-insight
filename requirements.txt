@@ -34,3 +34,5 @@ Pillow>=10.0.0
 holidays
 
 python-telegram-bot[job-queue]>=20.0
+
+kospi_kosdaq_stock_server

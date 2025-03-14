@@ -430,7 +430,7 @@ class TelegramAIBot:
                     
                     ##주의사항 : load_all_tickers tool은 절대 사용 금지!!
                     """,
-                    server_names=["exa", "kospi_kosdaq"]
+                    server_names=["perplexity", "kospi_kosdaq"]
                 )
 
                 # LLM 연결
@@ -654,7 +654,7 @@ class TelegramAIBot:
                                 - 불확실한 내용은 정직하게 인정
                                 - load_all_tickers tool은 절대 사용 금지!!
                                 """,
-                    server_names=["exa", "kospi_kosdaq"]
+                    server_names=["perplexity", "kospi_kosdaq"]
                 )
 
                 # LLM 연결
