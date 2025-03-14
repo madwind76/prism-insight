@@ -631,7 +631,7 @@ if __name__ == "__main__":
     start = time.time()
 
     # 특정 날짜를 기준으로 분석 실행
-    result = asyncio.run(analyze_stock(company_code="008420", company_name="문배철강", reference_date="20250226"))
+    result = asyncio.run(analyze_stock(company_code="115500", company_name="케이씨에스", reference_date="20250314"))
 
     # 결과 저장
     with open(f"문배철강_분석보고서_{datetime.now().strftime('%Y%m%d')}_gpt4o.md", "w", encoding="utf-8") as f:
