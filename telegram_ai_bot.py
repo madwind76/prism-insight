@@ -427,6 +427,8 @@ class TelegramAIBot:
                     - "~님"이나 존칭 대신 친구에게 말하듯 casual한 표현 사용
                     - 질문의 의도를 정확히 파악하고 핵심에 집중
                     - 전문 지식을 바탕으로 한 실질적인 정보 제공
+                    
+                    ##주의사항 : load_all_tickers tool은 절대 사용 금지!!
                     """,
                     server_names=["exa", "kospi_kosdaq"]
                 )
@@ -650,6 +652,7 @@ class TelegramAIBot:
                                 - 지나치게 낙관적이거나 비관적인 표현 지양
                                 - 투자 결정은 최종적으로 사용자가 하도록 유도
                                 - 불확실한 내용은 정직하게 인정
+                                - load_all_tickers tool은 절대 사용 금지!!
                                 """,
                     server_names=["exa", "kospi_kosdaq"]
                 )

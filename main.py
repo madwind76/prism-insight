@@ -22,43 +22,6 @@ URLS = {
     "최근리포트": "c1080001.aspx?cmp_cd={}"
 }
 
-async def write_report_section(data_key: str, agent: Agent,
-                               company_name: str, company_code: str, reference_date: str, logger, delay: float = 10.0):
-    """데이터 수집 및 보고서 작성을 위한 통합 async 함수"""
-    # 각 작업 시작 전 지연
-    await asyncio.sleep(delay)
-
-    logger.info(f"Processing {data_key} for {company_name}...")
-
-    llm = await agent.attach_llm(OpenAIAugmentedLLM)
-    section_report = await llm.generate_str(
-        message=f"""{company_name}({company_code})의 {data_key} 분석 보고서를 작성해주세요.
-                
-                ## 분석 및 보고서 작성 지침:
-                1. 데이터 수집부터 분석까지 모든 과정을 수행하세요.
-                2. 보고서는 충분히 상세하되 핵심 정보에 집중하세요.
-                3. 일반 개인 투자자가 쉽게 이해할 수 있는 수준으로 작성하세요.
-                4. 투자 결정에 직접적으로 도움이 되는 실용적인 내용에 집중하세요.
-                5. 실제 수집된 데이터에만 기반하여 분석하고, 없는 데이터는 추측하지 마세요.
-                
-                ## 형식 요구사항:
-                1. 보고서 시작 시 제목을 넣기 전에 반드시 개행문자를 2번 넣어 시작하세요 (\\n\\n).
-                2. 섹션 제목과 구조는 에이전트 지침에 명시된 형식을 따르세요.
-                3. 가독성을 위해 적절히 단락을 나누고, 중요한 내용은 강조하세요.
-                
-                ##분석일: {reference_date}(YYYYMMDD 형식)
-                """,
-        request_params=RequestParams(
-            model="gpt-4o",
-            maxTokens=4000,
-            max_iterations=3,
-            parallel_tool_calls=True,
-            use_history=True
-        )
-    )
-
-    logger.info(f"Completed {data_key} - {len(section_report)} characters")
-    return data_key, section_report
 
 def clean_markdown(text: str) -> str:
     """마크다운 텍스트 정리"""
@@ -144,6 +107,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                                 - 확실하지 않은 내용은 "가능성이 있습니다", "~로 보입니다" 등으로 표현
                                 - 투자 권유가 아닌 정보 제공 관점에서 작성
                                 - 강한 매수/매도 추천보다 "기술적으로 ~한 상황입니다"와 같은 객관적 서술 사용
+                                - load_all_tickers tool은 절대 사용 금지!!
                                 
                                 ## 데이터가 불충분한 경우
                                 - 데이터 부족 시 명확히 언급하고, 가용한 데이터만으로 제한적 분석 제공
@@ -203,6 +167,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                                 - 확실하지 않은 내용은 "가능성이 있습니다", "~로 보입니다" 등으로 표현
                                 - 투자 권유가 아닌 정보 제공 관점에서 작성
                                 - 특정 투자자 그룹의 매매가 항상 옳다는 식의 편향된 해석 지양
+                                - load_all_tickers tool은 절대 사용 금지!!
                                 
                                 ## 데이터가 불충분한 경우
                                 - 데이터 부족 시 명확히 언급하고, 가용한 데이터만으로 제한적 분석 제공
@@ -471,7 +436,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                                 """,
                         request_params=RequestParams(
                             model="gpt-4o",
-                            maxTokens=4000,
+                            maxTokens=8000,
                             max_iterations=3,
                             parallel_tool_calls=True,
                             use_history=True
@@ -506,7 +471,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                                 """,
                             request_params=RequestParams(
                                 model="gpt-4o",
-                                maxTokens=4000,
+                                maxTokens=8000,
                                 max_iterations=3,
                                 parallel_tool_calls=True,
                                 use_history=True
@@ -543,7 +508,7 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
                 """,
                 request_params=RequestParams(
                     model="gpt-4o",
-                    maxTokens=4000,
+                    maxTokens=6000,
                     max_iterations=3,
                     parallel_tool_calls=True,
                     use_history=True
@@ -610,16 +575,16 @@ async def analyze_stock(company_code: str = "000660", company_name: str = "SK하
             executive_summary = "# 핵심 투자 포인트\n\n분석 요약을 생성하는 데 문제가 발생했습니다."
 
         # 면책 문구 정의
-        disclaimer = """# 투자 유의사항
-        
-                        본 보고서는 정보 제공을 목적으로 작성되었으며, 투자 권유를 목적으로 하지 않습니다. 
-                        본 보고서에 기재된 내용은 작성 시점 기준으로 신뢰할 수 있는 자료에 근거하여 AI로 작성되었으나, 
-                        그 정확성과 완전성을 보장하지 않습니다.
-                        
-                        투자는 본인의 판단과 책임 하에 신중하게 이루어져야 하며, 
-                        본 보고서를 참고하여 발생하는 투자 결과에 대한 책임은 투자자 본인에게 있습니다.
-        
-                      """
+        disclaimer = """
+# 투자 유의사항
+
+본 보고서는 정보 제공을 목적으로 작성되었으며, 투자 권유를 목적으로 하지 않습니다. 
+본 보고서에 기재된 내용은 작성 시점 기준으로 신뢰할 수 있는 자료에 근거하여 AI로 작성되었으나, 
+그 정확성과 완전성을 보장하지 않습니다.
+
+투자는 본인의 판단과 책임 하에 신중하게 이루어져야 하며, 
+본 보고서를 참고하여 발생하는 투자 결과에 대한 책임은 투자자 본인에게 있습니다.
+"""
 
         # 최종 보고서 조합
         section_order = ["price_volume_analysis", "investor_trading_analysis", "company_status", "company_overview", "news_analysis", "investment_strategy"]

@@ -158,6 +158,8 @@ class TelegramSummaryGenerator:
                         {warning_message}
                         
                         메시지 끝에는 "본 정보는 투자 참고용이며, 투자 결정과 책임은 투자자에게 있습니다." 문구를 반드시 포함하세요.
+                        
+                        ##주의사항 : load_all_tickers tool은 절대 사용 금지!!
                         """,
             server_names=["kospi_kosdaq"]
         )
@@ -187,6 +189,8 @@ class TelegramSummaryGenerator:
                         - 각 기준별 세부 평가
                         - 개선을 위한 구체적인 제안
                         - 특히 할루시네이션이 있다면 명확하게 지적
+                        
+                        ##주의사항 : load_all_tickers tool은 절대 사용 금지!!
                         """,
             server_names=["kospi_kosdaq"]
         )
