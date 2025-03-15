@@ -2,10 +2,9 @@
 """
 텔레그램 AI 대화형 봇
 
-사용자 질의에 맞춤형 응답을 제공하는 봇:
-- 사용자 질의를 처리하여 보유 종목에 대한 분석 및 조언 제공
-- 관련 시장 데이터 및 보고서 참조하여 정확한 정보 제공
-- 친근하고 공감적인 톤으로 응답
+사용자 요청에 맞춤형 응답을 제공하는 봇:
+- /evaluate 명령어를 통해 보유 종목에 대한 분석 및 조언 제공
+- 채널 구독자만 사용 가능
 """
 import asyncio
 import json
@@ -48,7 +47,10 @@ logger = logging.getLogger(__name__)
 
 # 상수 정의
 REPORTS_DIR = Path("reports")
-CHOOSING_TICKER, ENTERING_AVGPRICE, ENTERING_PERIOD = range(3)
+CHOOSING_TICKER, ENTERING_AVGPRICE, ENTERING_PERIOD, ENTERING_TONE, ENTERING_BACKGROUND = range(5)
+
+# 채널 ID
+CHANNEL_ID = int(os.getenv("TELEGRAM_CHANNEL_ID"))
 
 class TelegramAIBot:
     """텔레그램 AI 대화형 봇"""
@@ -58,6 +60,11 @@ class TelegramAIBot:
         self.token = os.getenv("TELEGRAM_AI_BOT_TOKEN")
         if not self.token:
             raise ValueError("텔레그램 봇 토큰이 설정되지 않았습니다.")
+
+        # 채널 ID 확인
+        self.channel_id = int(os.getenv("TELEGRAM_CHANNEL_ID"))
+        if not self.channel_id:
+            raise ValueError("텔레그램 채널 ID가 설정되지 않았습니다.")
 
         # 종목 정보 초기화
         self.stock_map = {}
@@ -127,6 +134,12 @@ class TelegramAIBot:
                 ENTERING_PERIOD: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_period_input)
                 ],
+                ENTERING_TONE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_tone_input)
+                ],
+                ENTERING_BACKGROUND: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_background_input)
+                ],
             },
             fallbacks=[
                 CommandHandler("cancel", self.handle_cancel),
@@ -142,71 +155,35 @@ class TelegramAIBot:
         )
         self.application.add_handler(conv_handler)
 
-        # 일반 텍스트 메시지
+        # 일반 텍스트 메시지 - /help 또는 /start 안내
         self.application.add_handler(MessageHandler(
-            filters.TEXT & ~filters.COMMAND, self.handle_message
+            filters.TEXT & ~filters.COMMAND, self.handle_default_message
         ))
 
         # 오류 핸들러
         self.application.add_error_handler(self.handle_error)
 
-    def is_stock_inquiry(self, message_text):
-        """
-        메시지가 특정 종목에 대한 질문인지 확인
-
-        Args:
-            message_text (str): 사용자 메시지
-
-        Returns:
-            bool: 종목 질문 여부
-        """
-        # 종목 코드 패턴 (6자리 숫자)
-        if re.search(r'\b\d{6}\b', message_text):
-            return True
-
-        # 종목명 포함 여부 확인
-        for stock_name in self.stock_name_map.keys():
-            if stock_name in message_text:
-                return True
-
-        # 종목 관련 키워드 확인
-        stock_keywords = ["주가", "종목", "주식", "전망", "실적", "투자", "매수", "매도"]
-        return any(keyword in message_text for keyword in stock_keywords)
-
-    def extract_stock_info(self, message_text):
-        """
-        메시지에서 종목 코드나 이름 추출
-
-        Args:
-            message_text (str): 사용자 메시지
-
-        Returns:
-            tuple: (종목 코드, 종목 이름) 또는 (None, None)
-        """
-        # 종목 코드 패턴 (6자리 숫자) 찾기
-        code_match = re.search(r'\b(\d{6})\b', message_text)
-        if code_match:
-            stock_code = code_match.group(1)
-            stock_name = self.stock_map.get(stock_code)
-            if stock_name:
-                return stock_code, stock_name
-
-        # 종목명 찾기
-        for stock_name, stock_code in self.stock_name_map.items():
-            if stock_name in message_text:
-                return stock_code, stock_name
-
-        return None, None
+    async def handle_default_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """일반 메시지는 /help 또는 /start 안내"""
+        await update.message.reply_text(
+            "안녕하세요! 저는 주식 분석 AI 봇입니다.\n\n"
+            "다음 명령어를 사용해보세요:\n"
+            "/start - 봇 시작하기\n"
+            "/help - 도움말 보기\n"
+            "/evaluate - 보유 종목 평가 시작하기"
+        )
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """시작 명령어 처리"""
         user = update.effective_user
         await update.message.reply_text(
             f"안녕하세요, {user.first_name}님! 저는 주식 분석 AI 봇입니다.\n\n"
-            "다음과 같은 방법으로 저와 대화할 수 있습니다:\n"
-            "- /evaluate 명령어로 보유 종목에 대한 평가를 요청\n"
-            "- 종목이나 시장에 관한 질문을 직접 물어보기\n\n"
-            "더 자세한 정보는 /help 명령어를 입력해주세요."
+            "저는 보유하신 종목에 대한 평가를 제공합니다.\n"
+            "/evaluate 명령어를 사용하여 평가를 시작할 수 있습니다.\n\n"
+            "이 봇은 '주식 AI 분석기' 채널 구독자만 사용할 수 있습니다.\n"
+            "채널에서는 장 시작과 마감 시 AI가 선별한 특징주 3개를 소개하고,\n"
+            "각 종목에 대한 AI에이전트가 작성한 고퀄리티의 상세 분석 보고서를 제공합니다.\n\n"
+            "다음 링크를 구독한 후 봇을 사용해주세요: https://t.me/stock_ai_agent"
         )
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -219,21 +196,55 @@ class TelegramAIBot:
             "/evaluate - 보유 종목 평가 시작\n"
             "/cancel - 현재 진행 중인 대화 취소\n\n"
             "<b>보유 종목 평가 방법:</b>\n"
-            "1. /평가 명령어 입력\n"
+            "1. /evaluate 명령어 입력\n"
             "2. 종목 코드 또는 이름 입력\n"
             "3. 평균 매수가 입력\n"
-            "4. 보유 기간 입력\n\n"
-            "<b>일반 질문:</b>\n"
-            "종목이나 시장에 관한 궁금한 점을 자유롭게 물어보세요!\n"
-            "예: \"삼성전자 전망이 어떤가요?\", \"코스피 지수 상승 하락 이유는?\"",
+            "4. 보유 기간 입력\n"
+            "5. 원하는 피드백 스타일 입력\n"
+            "6. 매매 배경 입력 (선택사항)\n\n"
+            "<b>주의:</b>\n"
+            "이 봇은 채널 구독자만 사용할 수 있습니다.",
             parse_mode="HTML"
         )
 
+    async def check_channel_subscription(self, user_id):
+        """
+        사용자가 채널을 구독하고 있는지 확인
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            bool: 구독 여부
+        """
+        try:
+            member = await self.application.bot.get_chat_member(
+                int(os.getenv("TELEGRAM_CHANNEL_ID")), user_id
+            )
+            # 최신 버전에서는 상수 속성 대신 문자열 비교
+            return member.status in ['member', 'administrator', 'creator', 'owner']
+        except Exception as e:
+            logger.error(f"채널 구독 확인 중 오류: {e}")
+            return False
+
     async def handle_evaluate_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """평가 명령어 처리 - 첫 단계"""
+        user_id = update.effective_user.id
+        user_name = update.effective_user.first_name
+
+        # 채널 구독 여부 확인
+        is_subscribed = await self.check_channel_subscription(user_id)
+
+        if not is_subscribed:
+            await update.message.reply_text(
+                "이 봇은 채널 구독자만 사용할 수 있습니다.\n"
+                "아래 링크를 통해 채널을 구독해주세요:\n\n"
+                "https://t.me/+HsH3EbONYE8wNmM1"
+            )
+            return ConversationHandler.END
+
         # 그룹 채팅인지 개인 채팅인지 확인
         is_group = update.effective_chat.type in ["group", "supergroup"]
-        user_name = update.effective_user.first_name
 
         logger.info(f"평가 명령 시작 - 사용자: {user_name}, 채팅타입: {'그룹' if is_group else '개인'}")
 
@@ -300,33 +311,12 @@ class TelegramAIBot:
             period = int(update.message.text.strip())
             context.user_data['period'] = period
 
-            # 응답 대기 메시지
-            waiting_message = await update.message.reply_text(
-                "종목 분석 중입니다... 잠시만 기다려주세요."
+            # 다음 단계: 원하는 피드백 스타일/톤 입력 받기
+            await update.message.reply_text(
+                "어떤 스타일이나 말투로 피드백을 받고 싶으신가요?\n"
+                "예: 솔직하게, 전문적으로, 친구같이, 간결하게 등"
             )
-
-            # AI 에이전트로 분석 요청
-            ticker = context.user_data['ticker']
-            ticker_name = context.user_data.get('ticker_name', f"종목_{ticker}")
-            avg_price = context.user_data['avg_price']
-            period = context.user_data['period']
-
-            # 최신 보고서 찾기
-            latest_report = self.find_latest_report(ticker)
-
-            # AI 응답 생성
-            response = await self.generate_evaluation_response(
-                ticker, ticker_name, avg_price, period, latest_report
-            )
-
-            # 대기 메시지 삭제
-            await waiting_message.delete()
-
-            # 응답 전송
-            await update.message.reply_text(response)
-
-            # 대화 종료
-            return ConversationHandler.END
+            return ENTERING_TONE
 
         except ValueError:
             await update.message.reply_text(
@@ -334,6 +324,63 @@ class TelegramAIBot:
                 "예: 6"
             )
             return ENTERING_PERIOD
+
+    async def handle_tone_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """원하는 피드백 스타일/톤 입력 처리"""
+        tone = update.message.text.strip()
+        context.user_data['tone'] = tone
+
+        await update.message.reply_text(
+            "종목을 매매하게 된 배경이나 주요 매매 히스토리가 있으시면 알려주세요.\n"
+            "(선택사항이므로, 없으면 '없음'이라고 입력해주세요)"
+        )
+        return ENTERING_BACKGROUND
+
+    async def handle_background_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """매매 배경 입력 처리 및 AI 응답 생성"""
+        background = update.message.text.strip()
+        context.user_data['background'] = background if background.lower() != '없음' else ""
+
+        # 응답 대기 메시지
+        waiting_message = await update.message.reply_text(
+            "종목 분석 중입니다... 잠시만 기다려주세요."
+        )
+
+        # AI 에이전트로 분석 요청
+        ticker = context.user_data['ticker']
+        ticker_name = context.user_data.get('ticker_name', f"종목_{ticker}")
+        avg_price = context.user_data['avg_price']
+        period = context.user_data['period']
+        tone = context.user_data['tone']
+        background = context.user_data['background']
+
+        # 최신 보고서 찾기
+        latest_report = self.find_latest_report(ticker)
+
+        try:
+            # AI 응답 생성
+            response = await self.generate_evaluation_response(
+                ticker, ticker_name, avg_price, period, tone, background, latest_report
+            )
+
+            # 응답이 비어있는지 확인
+            if not response or not response.strip():
+                response = "죄송합니다. 응답 생성 중 오류가 발생했습니다. 다시 시도해주세요."
+                logger.error(f"빈 응답이 생성되었습니다: {ticker_name}({ticker})")
+
+            # 대기 메시지 삭제
+            await waiting_message.delete()
+
+            # 응답 전송
+            await update.message.reply_text(response)
+
+        except Exception as e:
+            logger.error(f"응답 생성 또는 전송 중 오류: {str(e)}, {traceback.format_exc()}")
+            await waiting_message.delete()
+            await update.message.reply_text("죄송합니다. 분석 중 오류가 발생했습니다. 다시 시도해주세요.")
+
+        # 대화 종료
+        return ConversationHandler.END
 
     async def handle_cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """대화 취소 처리"""
@@ -344,168 +391,6 @@ class TelegramAIBot:
             "평가 요청이 취소되었습니다. 다시 시작하려면 /evaluate 명령어를 입력해주세요."
         )
         return ConversationHandler.END
-
-    async def handle_stock_inquiry(self, update, context, stock_code, stock_name):
-        """
-        종목 관련 질문 처리
-
-        Args:
-            update (Update): 텔레그램 업데이트 객체
-            context (CallbackContext): 콜백 컨텍스트
-            stock_code (str): 종목 코드
-            stock_name (str): 종목 이름
-        """
-        # 응답 대기 메시지
-        waiting_message = await update.message.reply_text(
-            f"{stock_name} 종목에 대한 정보를 분석 중입니다... 잠시만 기다려주세요."
-        )
-
-        # 최신 보고서 찾기
-        latest_report = self.find_latest_report(stock_code)
-
-        # AI 응답 생성
-        try:
-            # 사용자 질문 추출
-            question = update.message.text
-
-            # 종목 정보와 질문을 바탕으로 AI 응답 생성
-            response = await self.generate_stock_inquiry_response(
-                stock_code, stock_name, question, latest_report
-            )
-
-            # 대기 메시지 삭제
-            try:
-                await waiting_message.delete()
-            except Exception as e:
-                logger.warning(f"대기 메시지 삭제 실패: {e}")
-
-            # 응답 전송
-            await update.message.reply_text(response)
-
-        except Exception as e:
-            logger.error(f"종목 질의 응답 생성 중 오류: {e}")
-
-            # 대기 메시지 삭제 시도
-            try:
-                await waiting_message.delete()
-            except:
-                pass
-
-            await update.message.reply_text(
-                f"죄송합니다. {stock_name} 종목에 대한 정보를 분석하는 중 오류가 발생했습니다. 다시 시도해주세요."
-            )
-
-    async def generate_stock_inquiry_response(self, ticker, ticker_name, question, report_path=None):
-        """
-        종목 질의에 대한 AI 응답 생성
-
-        Args:
-            ticker (str): 종목 코드
-            ticker_name (str): 종목 이름
-            question (str): 사용자 질문
-            report_path (str, optional): 보고서 파일 경로
-
-        Returns:
-            str: AI 응답
-        """
-        try:
-            async with self.app.run() as app:
-                logger = app.logger
-
-                # 에이전트 생성
-                agent = Agent(
-                    name="stock_inquiry_agent",
-                    instruction=f"""당신은 주식 종목 정보 제공 전문가입니다. 사용자의 종목 관련 질문에 전문적이고 친근한 톤으로 응답해야 합니다.
-                    
-                    ## 정보
-                    - 종목 코드: {ticker}
-                    - 종목 이름: {ticker_name}
-                    - 사용자 질문: {question}
-                    
-                    ## 응답 스타일
-                    - 친한 친구가 조언하는 것처럼 편안하고 공감적인 톤 유지
-                    - "~님"이나 존칭 대신 친구에게 말하듯 casual한 표현 사용
-                    - 질문의 의도를 정확히 파악하고 핵심에 집중
-                    - 전문 지식을 바탕으로 한 실질적인 정보 제공
-                    
-                    ##주의사항 : load_all_tickers tool은 절대 사용 금지!!
-                    """,
-                    server_names=["perplexity", "kospi_kosdaq"]
-                )
-
-                # LLM 연결
-                llm = await agent.attach_llm(OpenAIAugmentedLLM)
-
-                # 보고서 내용 확인
-                report_content = ""
-                if report_path and os.path.exists(report_path):
-                    with open(report_path, 'r', encoding='utf-8') as f:
-                        report_content = f.read()
-
-                # 응답 생성
-                response = await llm.generate_str(
-                    message=f"""다음 종목에 관한 질문에 답변해주세요:
-                    
-                    ## 정보
-                    - 종목 코드: {ticker}
-                    - 종목 이름: {ticker_name}
-                    - 사용자 질문: {question}
-                    
-                    ## 참고 자료
-                    {report_content if report_content else "관련 보고서가 없습니다. 일반적인 시장 지식과 최근 동향을 바탕으로 답변해주세요."}
-                    """,
-                    request_params=RequestParams(
-                        model="gpt-4o-mini",
-                        maxTokens=1500,
-                        max_iterations=1,
-                        parallel_tool_calls=False,
-                        use_history=False
-                    )
-                )
-
-                return response
-
-        except Exception as e:
-            logger.error(f"종목 질의 응답 생성 중 오류: {str(e)}")
-            return f"죄송합니다. {ticker_name} 종목에 대한 정보를 분석하는 중 오류가 발생했습니다. 다시 시도해주세요."
-
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """일반 메시지 처리"""
-        message_text = update.message.text
-        logger.info(f"사용자 메시지 수신: {message_text[:50]}...")
-
-        # 특정 종목에 대한 질문인지 확인
-        if self.is_stock_inquiry(message_text):
-            # 종목 코드 또는 이름 추출
-            stock_code, stock_name = self.extract_stock_info(message_text)
-            if stock_code:
-                # 종목에 대한 AI 응답 생성
-                await self.handle_stock_inquiry(update, context, stock_code, stock_name)
-                return
-
-        # 응답 대기 메시지
-        waiting_message = await update.message.reply_text(
-            "질문을 분석 중입니다... 잠시만 기다려주세요."
-        )
-
-        # AI 응답 생성 (일반 대화용)
-        try:
-            response = await self.generate_conversation_response(message_text)
-
-            # 대기 메시지 삭제
-            try:
-                await waiting_message.delete()
-            except Exception as e:
-                logger.warning(f"대기 메시지 삭제 실패: {e}")
-
-            # 응답 전송
-            await update.message.reply_text(response)
-
-        except Exception as e:
-            logger.error(f"응답 생성 중 오류: {e}")
-            await update.message.reply_text(
-                "죄송합니다. 응답 생성 중 오류가 발생했습니다. 다시 시도해주세요."
-            )
 
     async def handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """오류 처리"""
@@ -600,7 +485,7 @@ class TelegramAIBot:
             # 일치하는 항목이 없으면 오류 메시지 반환
             return None, None, f"'{stock_input}'에 해당하는 종목을 찾을 수 없습니다. 정확한 종목명이나 종목코드를 입력해주세요."
 
-    async def generate_evaluation_response(self, ticker, ticker_name, avg_price, period, report_path=None):
+    async def generate_evaluation_response(self, ticker, ticker_name, avg_price, period, tone, background, report_path=None):
         """
         종목 평가 AI 응답 생성
 
@@ -609,6 +494,8 @@ class TelegramAIBot:
             ticker_name (str): 종목 이름
             avg_price (float): 평균 매수가
             period (int): 보유 기간 (개월)
+            tone (str): 원하는 피드백 스타일/톤
+            background (str): 매매 배경/히스토리
             report_path (str, optional): 보고서 파일 경로
 
         Returns:
@@ -616,39 +503,61 @@ class TelegramAIBot:
         """
         try:
             async with self.app.run() as app:
-                logger = app.logger
+                app_logger = app.logger
+
+                # 현재 날짜 정보 가져오기
+                current_date = datetime.now().strftime('%Y년 %m월 %d일')
+
+                # 배경 정보 추가 (있는 경우)
+                background_text = f"\n- 매매 배경/히스토리: {background}" if background else ""
 
                 # 에이전트 생성
                 agent = Agent(
                     name="evaluation_agent",
-                    instruction=f"""당신은 주식 종목 평가 전문가입니다. 사용자가 보유한 종목에 대해 친근하고 공감적인 톤으로 평가와 조언을 제공해야 합니다.
-
-                                ## 평가 정보
+                    instruction=f"""당신은 주식 종목 평가 전문가입니다. 사용자가 보유한 종목에 대해 지정된 스타일로 평가와 조언을 제공해야 합니다.
+    
+                                ## 기본 정보
+                                - 현재 날짜: {current_date}
                                 - 종목 코드: {ticker}
                                 - 종목 이름: {ticker_name}
                                 - 평균 매수가: {avg_price}원
                                 - 보유 기간: {period}개월
-
+                                - 원하는 피드백 스타일: {tone}
+                                - 지금까지 매매 배경 또는 히스토리(Optional): {background_text}
+    
+                                ## 데이터 수집 및 분석 단계
+                                1. 먼저 get_stock_ohlcv 툴을 사용하여 종목({ticker})의 최신 주가 데이터를 조회하세요.
+                                   - fromdate와 todate는 최근 1개월의 날짜를 사용하세요.
+                                2. perplexity_ask 툴을 사용하여 다음 정보를 검색하세요:
+                                   - "{ticker_name} 기업 최근 뉴스 및 실적 분석"
+                                   - "{ticker_name} 소속 업종 동향 및 전망"
+                                   - "국내 증시 현황 및 전망"
+                                   - "글로벌 시장 동향 및 환율 영향"
+                                3. 필요에 따라 get_stock_fundamental과 get_stock_market_cap 툴을 사용하여 추가 데이터를 수집하세요.
+                                4. 수집된 모든 정보를 종합적으로 분석하여 종목 평가에 활용하세요.
+    
                                 ## 응답 스타일
-                                - 친한 친구가 조언하는 것처럼 편안하고 공감적인 톤 유지
+                                - 사용자가 요청한 스타일({tone})에 맞춰 피드백 제공
                                 - 투자 심리에 대한 공감과 이해 표현
-                                - "~님"이나 존칭 대신 친구에게 말하듯 casual한 표현 사용
                                 - 전문 지식을 바탕으로 한 실질적인 조언 제공
                                 - 긍정적인 측면과 주의해야 할 측면을 균형있게 설명
                                 - 너무 조심스럽거나 책임 회피적인 표현 지양
-
+    
                                 ## 응답 구성
-                                1. 간단한 인사와 현재 상황 요약
+                                1. 간단한 인사와 현재 날짜 기준 상황 요약
                                 2. 현재 주가와 매수가 비교 및 손익 언급
-                                3. 해당 종목의 최근 동향 설명
-                                4. 향후 전망에 대한 의견 (단기/중기)
-                                5. 손익 실현 또는 추가 매수에 대한 의견
-                                6. 심리적 조언 (투자 심리 관련)
-                                7. 응원과 마무리
-
+                                3. 해당 종목의 최근 동향 설명 (최신 뉴스, 실적 자료 기반)
+                                4. 해당 업종의 시장 상황과 전망 (업계 동향 기반)
+                                5. 국내외 증시 및 경제 전망이 해당 종목에 미치는 영향
+                                6. 향후 전망에 대한 의견 (단기/중기)
+                                7. 손익 실현 또는 추가 매수에 대한 의견
+                                8. 심리적 조언 (투자 심리 관련)
+                                9. 응원과 마무리
+    
                                 ## 주의사항
-                                - 실제 보유 종목의 최신 정보 참조하여 정확한 내용 포함
-                                - 종목 정보뿐 아니라 최신 업계 흐름이나 경제 동향을 웹서치하여 참조하여 응답에 활용
+                                - 실제 보유 종목의 최신 정보를 참조하여 정확한 내용 포함
+                                - '{current_date}' 기준 정보임을 명시하고 최신 데이터 기반으로 응답
+                                - 종목 정보뿐 아니라 최신 업계 흐름이나 경제 동향을 perplexity_ask로 검색하여 응답에 활용
                                 - 지나치게 낙관적이거나 비관적인 표현 지양
                                 - 투자 결정은 최종적으로 사용자가 하도록 유도
                                 - 불확실한 내용은 정직하게 인정
@@ -666,99 +575,45 @@ class TelegramAIBot:
                     with open(report_path, 'r', encoding='utf-8') as f:
                         report_content = f.read()
 
+                # 배경 정보 포함 (있는 경우)
+                background_msg = f"\n- 사용자의 매매 배경/히스토리: {background}" if background else ""
+
                 # 응답 생성
                 response = await llm.generate_str(
-                    message=f"""보유한 주식 종목에 대한 평가와 조언을 친근하고 공감적인 톤으로 해줘.
-
+                    message=f"""현재 날짜({current_date}) 기준으로 보유한 주식 종목에 대한 평가와 조언을 사용자가 요청한 스타일로 해줘.
+    
                             ## 평가 정보
                             - 종목 코드: {ticker}
                             - 종목 이름: {ticker_name}
                             - 평균 매수가: {avg_price}원
                             - 보유 기간: {period}개월
-
+                            - 원하는 피드백 스타일: {tone}{background_msg}
+    
+                            ## 분석 지침
+                            1. get_stock_ohlcv 툴을 사용하여 {ticker} 종목의 최신 주가 데이터를 조회하세요.
+                            2. perplexity_ask 툴을 사용하여 다음 정보를 검색하세요:
+                               - "{ticker_name} 기업 최근 뉴스 및 실적"
+                               - "{ticker_name} 소속 업종 동향"
+                               - "국내 증시 현황 및 전망"
+                            3. 필요시 get_stock_fundamental과 get_stock_market_cap 툴을 사용하여 추가 데이터를 수집하세요.
+                            4. 수집한 모든 정보를 바탕으로 종합적인 평가와 조언을 제공하세요.
+    
                             ## 참고 자료
-                            {report_content if report_content else "관련 보고서가 없습니다. 일반적인 시장 지식과 최근 동향을 바탕으로 평가해주세요."}
+                            {report_content if report_content else "관련 보고서가 없습니다. 시장 데이터 조회와 perplexity 검색을 통해 최신 정보를 수집하여 평가해주세요."}
                             """,
                     request_params=RequestParams(
                         model="gpt-4o-mini",
                         maxTokens=1500,
-                        max_iterations=1,
-                        parallel_tool_calls=False,
-                        use_history=False
+                        max_iterations=3  # 충분한 데이터 수집을 위해 반복 횟수 증가
                     )
                 )
+                app_logger.error(f"응답 생성 결과: {str(response)}")
 
                 return response
 
         except Exception as e:
             logger.error(f"응답 생성 중 오류: {str(e)}")
             return "죄송합니다. 평가 중 오류가 발생했습니다. 다시 시도해주세요."
-
-    async def generate_conversation_response(self, message_text):
-        """
-        일반 대화 AI 응답 생성
-
-        Args:
-            message_text (str): 사용자 메시지
-
-        Returns:
-            str: AI 응답
-        """
-        try:
-            async with self.app.run() as app:
-                logger = app.logger
-
-                # 에이전트 생성
-                agent = Agent(
-                    name="conversation_agent",
-                    instruction=f"""당신은 주식 및 투자 상담 전문가입니다. 사용자의 다양한 질문에 친근하고 공감적인 톤으로 전문적인 답변을 제공해야 합니다.
-
-                                ## 응답 스타일
-                                - 친한 친구가 조언하는 것처럼 편안하고 공감적인 톤 유지
-                                - "~님"이나 존칭 대신 친구에게 말하듯 casual한 표현 사용
-                                - 질문의 의도를 정확히 파악하고 핵심에 집중
-                                - 전문 지식을 바탕으로 한 실질적인 정보 제공
-                                - 너무 조심스럽거나 책임 회피적인 표현 지양
-                                - 필요한 경우 추가 질문 유도
-
-                                ## 응답 구성
-                                1. 질문 의도 확인 또는 인사
-                                2. 핵심 정보 제공
-                                3. 관련 배경 지식 또는 맥락 설명
-                                4. 실질적인 조언이나 관점 제시
-                                5. 필요시 추가 질문이나 마무리
-
-                                ## 주의사항
-                                - 최신 시장 정보 및 종목 동향 참조하여 정확한 내용 포함
-                                - 지나치게 낙관적이거나 비관적인 표현 지양
-                                - 투자 결정은 최종적으로 사용자가 하도록 유도
-                                - 불확실한 내용은 정직하게 인정
-                                """
-                )
-
-                # LLM 연결
-                llm = await agent.attach_llm(OpenAIAugmentedLLM)
-
-                # 응답 생성
-                response = await llm.generate_str(
-                    message=f"""다음 질문에 친근하고 공감적인 톤으로 답변해주세요:
-
-                            질문: {message_text}
-                            """,
-                    request_params=RequestParams(
-                        model="gpt-4o-mini",
-                        maxTokens=1500,
-                        max_iterations=1,
-                        parallel_tool_calls=False,
-                        use_history=False
-                    )
-                )
-
-                return response
-
-        except Exception as e:
-            logger.error(f"응답 생성 중 오류: {str(e)}")
-            return "죄송합니다. 응답 생성 중 오류가 발생했습니다. 다시 시도해주세요."
 
     async def run(self):
         """봇 실행"""
