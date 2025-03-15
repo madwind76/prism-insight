@@ -239,7 +239,7 @@ class TelegramAIBot:
             await update.message.reply_text(
                 "이 봇은 채널 구독자만 사용할 수 있습니다.\n"
                 "아래 링크를 통해 채널을 구독해주세요:\n\n"
-                "https://t.me/+HsH3EbONYE8wNmM1"
+                "https://t.me/stock_ai_agent"
             )
             return ConversationHandler.END
 
