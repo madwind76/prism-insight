@@ -147,7 +147,7 @@ class TelegramSummaryGenerator:
                            - 현재가
                            - 전일 대비 등락률
                            - 최근 거래량 (전일 대비 증감 퍼센트 포함)
-                        4. 시가총액 정보 및 동종 업계 내 위치
+                        4. 시가총액 정보 및 동종 업계 내 위치 (시가총액은 get_stock_market_cap tool 사용해서 현재 날짜({current_date})로부터 약 5일간의 데이터를 조회해서 참고)
                         5. 가장 관련 있는 최근 뉴스 1개와 잠재적 영향
                         6. 핵심 기술적 패턴 2-3개 (지지선/저항선 수치 포함)
                         7. 투자 관점 - 단기/중기 전망 또는 주요 체크포인트
@@ -164,16 +164,19 @@ class TelegramSummaryGenerator:
             server_names=["kospi_kosdaq"]
         )
 
-    def create_evaluator_agent(self):
+    def create_evaluator_agent(self, current_date):
         """
         텔레그램 요약 평가 에이전트 생성
         """
         return Agent(
             name="telegram_summary_evaluator",
-            instruction="""당신은 주식 정보 요약 메시지를 평가하는 전문가입니다.
+            instruction=f"""당신은 주식 정보 요약 메시지를 평가하는 전문가입니다.
                         주식 분석 보고서와 생성된 텔레그램 메시지를 비교하여 다음 기준에 따라 평가해야 합니다:
                         
                         1. 정확성: 메시지가 보고서의 사실을 정확하게 반영하는가? 할루시네이션이나 오류가 없는가?
+                        (이 때, 거래 정보 검증은 get_stock_ohlcv tool을 사용하여 현재 날짜({current_date})로부터 약 5일간의 데이터를 조회해서 검증 진행함.)
+                        또한, 시가총액은 get_stock_market_cap tool을 사용해서 마찬가지로 현재 날짜({current_date})로부터 약 5일간의 데이터를 조회해서 검증 진행.)
+                        
                         2. 포맷 준수: 지정된 형식(이모지, 종목 정보, 거래 정보 등)을 올바르게 따르고 있는가?
                         3. 명확성: 정보가 명확하고 이해하기 쉽게 전달되는가?
                         4. 관련성: 가장 중요하고 관련성 높은 정보를 포함하고 있는가?
@@ -206,7 +209,7 @@ class TelegramSummaryGenerator:
         optimizer = self.create_optimizer_agent(metadata, current_date)
 
         # 평가 에이전트 생성
-        evaluator = self.create_evaluator_agent()
+        evaluator = self.create_evaluator_agent(current_date)
 
         # 평가-최적화 워크플로우 설정
         evaluator_optimizer = EvaluatorOptimizerLLM(
