@@ -165,6 +165,11 @@ class TelegramAIBot:
 
     async def handle_default_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """일반 메시지는 /help 또는 /start 안내"""
+        # update.message이 None인지 확인
+        if update.message is None:
+            logger.warning(f"메시지가 없는 업데이트 수신: {update}")
+            return
+
         await update.message.reply_text(
             "안녕하세요! 저는 주식 분석 AI 봇입니다.\n\n"
             "다음 명령어를 사용해보세요:\n"
