@@ -80,6 +80,9 @@ class TelegramAIBot:
         self.application = Application.builder().token(self.token).build()
         self.setup_handlers()
 
+        # 기존 서버 프로세스 정리
+        self.cleanup_server_processes()
+
     def load_stock_map(self):
         """
         종목 코드와 이름을 매핑하는 딕셔너리 로드
@@ -162,6 +165,31 @@ class TelegramAIBot:
 
         # 오류 핸들러
         self.application.add_error_handler(self.handle_error)
+
+    def cleanup_server_processes(self):
+        """이전에 실행된 kospi_kosdaq 서버 프로세스 정리"""
+        try:
+            import subprocess
+            import os
+            import signal
+
+            # 서버 프로세스 찾기
+            result = subprocess.run(["pgrep", "-f", "kospi_kosdaq_stock_server"],
+                                    capture_output=True, text=True)
+
+            if result.returncode == 0:
+                for pid in result.stdout.strip().split('\n'):
+                    if pid and pid.isdigit():
+                        try:
+                            # 프로세스 종료
+                            os.kill(int(pid), signal.SIGTERM)
+                            logger.info(f"기존 kospi_kosdaq 서버 프로세스(PID: {pid}) 종료")
+                        except ProcessLookupError:
+                            pass
+                        except Exception as e:
+                            logger.error(f"프로세스 종료 중 오류: {str(e)}")
+        except Exception as e:
+            logger.error(f"서버 프로세스 정리 중 오류: {str(e)}")
 
     async def handle_default_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """일반 메시지는 /help 또는 /start 안내"""
@@ -613,6 +641,9 @@ class TelegramAIBot:
                 )
                 app_logger.error(f"응답 생성 결과: {str(response)}")
 
+                # 서버 프로세스 정리 추가
+                self.cleanup_server_processes()
+
                 return response
 
         except Exception as e:
@@ -638,6 +669,9 @@ class TelegramAIBot:
             # 종료 시 리소스 정리
             await self.application.stop()
             await self.application.shutdown()
+
+            # 서버 프로세스 정리 추가
+            self.cleanup_server_processes()
 
             logger.info("텔레그램 AI 대화형 봇이 종료되었습니다.")
 
