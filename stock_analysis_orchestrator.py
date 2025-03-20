@@ -9,12 +9,12 @@
 4. 텔레그램 채널 요약 메시지 생성 및 전송
 5. 생성된 PDF 첨부파일 전송
 """
-import os
-import sys
-import logging
 import argparse
 import asyncio
 import json
+import logging
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -443,6 +443,48 @@ class StockAnalysisOrchestrator:
 
             # 5. 텔레그램 메시지 및 PDF 전송
             await self.send_telegram_messages(message_paths, pdf_paths)
+
+            # 6. 트랙킹 시스템 배치
+            if report_paths:
+                try:
+                    logger.info("주식 트래킹 시스템 배치 실행 시작")
+
+                    # 트래킹 에이전트 임포트
+                    from stock_tracking_agent import StockTrackingAgent, app as tracking_app
+
+                    # 환경 변수에서 채널 ID 및 봇 토큰 가져오기
+                    from dotenv import load_dotenv
+                    load_dotenv()
+
+                    chat_id = os.getenv("TELEGRAM_CHANNEL_ID")
+                    telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+
+                    if not chat_id:
+                        logger.error("텔레그램 채널 ID가 설정되지 않았습니다.")
+                        return
+
+                    if not telegram_token:
+                        logger.warning("텔레그램 봇 토큰이 설정되지 않았습니다. 텔레그램 메시지 전송이 제한될 수 있습니다.")
+
+                    # MCPApp 컨텍스트 매니저 사용
+                    async with tracking_app.run():
+                        # 텔레그램 토큰과 함께 에이전트 초기화
+                        tracking_agent = StockTrackingAgent(telegram_token=telegram_token)
+
+                        # 보고서 경로와 채널 ID 전달
+                        tracking_success = await tracking_agent.run(report_paths, chat_id)
+
+                        if tracking_success:
+                            logger.info("트래킹 시스템 배치 실행 완료")
+                        else:
+                            logger.error("트래킹 시스템 배치 실행 실패")
+
+                except Exception as e:
+                    logger.error(f"트래킹 시스템 배치 실행 중 오류: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            else:
+                logger.warning("생성된 보고서가 없어 트래킹 시스템 배치를 실행하지 않습니다.")
 
             logger.info(f"전체 파이프라인 완료 - 모드: {mode}")
 
