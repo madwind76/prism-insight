@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # 설정파일 로딩
 CONFIG_FILE = TRADING_DIR / "config" / "kis_devlp.yaml"
 with open(CONFIG_FILE, encoding="UTF-8") as f:
-    _cfg = yaml.load(f, Loader=yaml.FullLoader)
+    _cfg = yaml.safe_load(f)
 
 
 class DomesticStockTrading:

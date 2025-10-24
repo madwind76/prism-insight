@@ -11,51 +11,47 @@ import sys
 import logging
 import datetime
 import yaml
-from pathlib import Path
-from typing import Dict, Any, List
-from dotenv import load_dotenv
 
 # 현재 스크립트의 디렉토리를 기준으로 경로 설정
-SCRIPT_DIR = Path(__file__).parent
-TRADING_DIR = SCRIPT_DIR
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 
-# trading 모듈 import를 위한 경로 추가
-PARENT_DIR = SCRIPT_DIR.parent
-sys.path.insert(0, str(PARENT_DIR))
-sys.path.insert(0, str(TRADING_DIR))
+sys.path.append(str(PROJECT_ROOT))
 
 # 설정파일 로딩
-CONFIG_FILE = TRADING_DIR / "config" / "kis_devlp.yaml"
-with open(CONFIG_FILE, encoding="UTF-8") as f:
-    _cfg = yaml.load(f, Loader=yaml.FullLoader)
+CONFIG_PATH = SCRIPT_DIR / "config" / "kis_devlp.yaml"
 
-# 로컬 모듈 import
-from trading.domestic_stock_trading import DomesticStockTrading
+if not CONFIG_PATH.exists():
+    # 예시 파일을 복사하여 생성
+    EXAMPLE_CONFIG_PATH = SCRIPT_DIR / "config" / "kis_devlp.yaml.example"
+    if EXAMPLE_CONFIG_PATH.exists():
+        import shutil
+        shutil.copy(EXAMPLE_CONFIG_PATH, CONFIG_PATH)
+        print(f"경고: 설정 파일이 없어 {CONFIG_PATH}에 예시 파일을 복사했습니다. 내용을 수정해주세요.")
+    else:
+        raise FileNotFoundError(f"설정 파일 또는 예시 파일이 존재하지 않습니다: {CONFIG_PATH}")
+
+try:
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+        _cfg = yaml.safe_load(f)
+except yaml.YAMLError as e:
+    print(f"YAML 설정 파일 로딩 중 오류 발생: {e}")
+    # 기본값으로 대체하거나, 프로그램을 종료하는 등의 예외 처리
+    _cfg = {}
+
+from cores.utils import get_kis_developer_api_headers, get_today_date_hhmm
 from telegram_bot_agent import TelegramBotAgent
+from trading.domestic_stock_trading import DomesticStockTrading
 
-# 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(SCRIPT_DIR / 'portfolio_reporter.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# env파일 로드
-SCRIPT_DIR = Path(__file__).parent.absolute()  # trading/
-PROJECT_ROOT = SCRIPT_DIR.parent              # project_root/
-ENV_FILE = PROJECT_ROOT / ".env"
-load_dotenv(dotenv_path=str(ENV_FILE))
 
 class PortfolioTelegramReporter:
-    """포트폴리오 상황을 텔레그램으로 리포트하는 클래스"""
+    """
+    한국투자증권 계좌의 포트폴리오를 조회하고 텔레그램으로 리포트하는 클래스
+    """
 
     def __init__(self, telegram_token: str = None, chat_id: str = None, trading_mode: str = None):
         """
-        초기화
+        리포터 초기화
 
         Args:
             telegram_token: 텔레그램 봇 토큰

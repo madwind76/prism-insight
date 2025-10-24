@@ -18,8 +18,8 @@ sys.path.insert(0, str(PROJECT_ROOT))       # 프로젝트 루트를 경로에 �
 
 # 설정파일 로딩
 CONFIG_FILE = TRADING_DIR / "config" / "kis_devlp.yaml"
-with open(CONFIG_FILE, encoding="UTF-8") as f:
-    _cfg = yaml.load(f, Loader=yaml.FullLoader)
+    with open(config_path, 'r', encoding='utf-8') as f:
+        _cfg = yaml.safe_load(f)
 
 from trading.portfolio_telegram_reporter import PortfolioTelegramReporter
 

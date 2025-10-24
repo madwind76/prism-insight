@@ -348,6 +348,7 @@ def markdown_to_pdf_pdfkit(md_file_path, pdf_file_path, add_theme=False, logo_pa
     try:
         # pdfkit 임포트 (설치 필요: pip install pdfkit + wkhtmltopdf 바이너리)
         import pdfkit
+        import re
 
         # 마크다운을 HTML로 변환
         html_content = markdown_to_html(
@@ -358,12 +359,18 @@ def markdown_to_pdf_pdfkit(md_file_path, pdf_file_path, add_theme=False, logo_pa
             watermark_opacity=watermark_opacity
         )
 
+        # HTML 살균 (XSS 방지)
+        # <script> 태그 제거
+        html_content = re.sub(r'<script.*?</script>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+        # onerror 속성 제거
+        html_content = re.sub(r'onerror=["\'\s]*[^"\'\s>]+["\'\s]*', '', html_content, flags=re.IGNORECASE)
+
         # HTML을 임시 파일로 저장
         with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
             f.write(html_content.encode('utf-8'))
             temp_html = f.name
 
-        # 옵션 설정
+        # 옵션 설정 (javascript 비활성화)
         options = {
             'encoding': 'UTF-8',
             'page-size': 'A4',
@@ -372,12 +379,7 @@ def markdown_to_pdf_pdfkit(md_file_path, pdf_file_path, add_theme=False, logo_pa
             'margin-bottom': '20mm',
             'margin-left': '20mm',
             'enable-local-file-access': None,
-            'quiet': '',
-            # wkhtmltopdf에 대한 추가 옵션
-            'enable-javascript': None,
-            'javascript-delay': '1000',  # JavaScript가 실행될 시간을 기다림 (밀리초)
-            'no-stop-slow-scripts': None,
-            'debug-javascript': None
+            'quiet': ''
         }
 
         # HTML을 PDF로 변환

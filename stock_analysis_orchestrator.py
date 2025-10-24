@@ -562,8 +562,27 @@ async def main():
     parser = argparse.ArgumentParser(description="주식 분석 및 텔레그램 전송 오케스트레이터")
     parser.add_argument("--mode", choices=["morning", "afternoon", "both"], default="both",
                         help="실행 모드 (morning, afternoon, both)")
+    parser.add_argument("--timeout", type=int, default=240,
+                        help="최대 실행 시간(분) 설정. 0이면 비활성화. 기본값 240분.")
 
     args = parser.parse_args()
+
+    # 영업일인 경우에만 타이머 스레드 시작
+    if args.timeout > 0:
+        import threading
+
+        # 타이머 함수
+        def exit_after_timeout(minutes):
+            import time
+            import os
+            import signal
+            time.sleep(minutes * 60)
+            logger.warning(f"{minutes}분 타임아웃 도달: 프로세스 강제 종료")
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        # 백그라운드 스레드로 타이머 시작
+        timer_thread = threading.Thread(target=lambda: exit_after_timeout(args.timeout), daemon=True)
+        timer_thread.start()
 
     orchestrator = StockAnalysisOrchestrator()
 
@@ -573,29 +592,14 @@ async def main():
     if args.mode == "afternoon" or args.mode == "both":
         await orchestrator.run_full_pipeline("afternoon")
 
+
 if __name__ == "__main__":
     # 휴일 체크
     from check_market_day import is_market_day
 
     if not is_market_day():
-        current_date = datetime.now().date()  # datetime.now()를 사용
+        current_date = datetime.now().date()
         logger.info(f"오늘({current_date})은 주식시장 휴일입니다. 배치 작업을 실행하지 않습니다.")
         sys.exit(0)
-
-    # 영업일인 경우에만 타이머 스레드 시작 및 메인 함수 실행
-    import threading
-
-    # 120분 후에 프로세스를 종료하는 타이머 함수
-    def exit_after_timeout():
-        import time
-        import os
-        import signal
-        time.sleep(7200)  # 120분 대기
-        logger.warning("120분 타임아웃 도달: 프로세스 강제 종료")
-        os.kill(os.getpid(), signal.SIGTERM)
-
-    # 백그라운드 스레드로 타이머 시작
-    timer_thread = threading.Thread(target=exit_after_timeout, daemon=True)
-    timer_thread.start()
 
     asyncio.run(main())
